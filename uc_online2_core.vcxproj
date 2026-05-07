@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="uc_online2_corecpp" />
+    <ClCompile Include="uc_online2_core.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\uc_loader.h" />

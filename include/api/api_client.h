@@ -37,53 +37,6 @@ extern uint32 g_ForcedAppId;
 extern uint32 g_OriginalAppId;
 static bool s_bAnonUser = false;
 
-static void SetAppIDEnv()
-{
-	char szApp[16] = { 0 };
-	char szGame[32] = { 0 };
-	char szOverlayGame[32] = { 0 };
-
-	_snprintf_s(szApp, sizeof(szApp), _TRUNCATE, "%u", g_ForcedAppId);
-	_snprintf_s(szGame, sizeof(szGame), _TRUNCATE, "%llu", CGameID(g_ForcedAppId).ToUint64());
-
-	uint32 overlayAppId = (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId;
-	_snprintf_s(szOverlayGame, sizeof(szOverlayGame), _TRUNCATE, "%llu", CGameID(overlayAppId).ToUint64());
-
-	SetEnvironmentVariableA("SteamAppId", szApp);
-	SetEnvironmentVariableA("SteamGameId", szGame);
-	SetEnvironmentVariableA("SteamOverlayGameId", szOverlayGame);
-}
-
-static void WriteAppIDFile()
-{
-	char buf[16] = { 0 };
-	_snprintf_s(buf, sizeof(buf), _TRUNCATE, "%u\n", g_ForcedAppId);
-
-	FILE* f = nullptr;
-	if (fopen_s(&f, "steam_appid.txt", "wb") == 0 && f)
-	{
-		fwrite(buf, 1, strlen(buf), f);
-		fclose(f);
-	}
-
-	char exePath[MAX_PATH] = { 0 };
-	if (GetModuleFileNameA(nullptr, exePath, MAX_PATH) != 0)
-	{
-		if (PathRemoveFileSpecA(exePath))
-		{
-			char fullPath[MAX_PATH] = { 0 };
-			_snprintf_s(fullPath, sizeof(fullPath), _TRUNCATE, "%s\\steam_appid.txt", exePath);
-
-			f = nullptr;
-			if (fopen_s(&f, fullPath, "wb") == 0 && f)
-			{
-				fwrite(buf, 1, strlen(buf), f);
-				fclose(f);
-			}
-		}
-	}
-}
-
 S_API HSteamPipe S_CALLTYPE GetHSteamPipe()
 {
 	UCOLOG("[UCOnline2] GetHSteamPipe\r\n");

@@ -10,8 +10,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <atomic>
+#include <cstdint>
+#include <string>
+#include <vector>
 
-#define STEAM_API_EXPORTS
+#define UC_CORE_EXPORTS
 
 #include "include/uc_loader.h"
 
@@ -67,10 +70,10 @@ static void UCOLogImpl(const char* fmt, va_list args)
 // Minimal CGameID implementation for AppID file
 struct CGameID
 {
-    uint64 m_ulGameID;
+    uint64_t m_ulGameID;
     
-    CGameID(uint32 nAppID) : m_ulGameID(nAppID) {}
-    uint64 ToUint64() const { return m_ulGameID; }
+    CGameID(uint32_t nAppID) : m_ulGameID(nAppID) {}
+    uint64_t ToUint64() const { return m_ulGameID; }
 };
 
 void UCOLOG(const char* fmt, ...)
