@@ -14,8 +14,6 @@
 #include <string>
 #include <vector>
 
-#define UC_CORE_EXPORTS
-
 #include "include/uc_loader.h"
 
 // ============================================================
@@ -23,6 +21,8 @@
 // ============================================================
 
 static HMODULE g_hModule = nullptr;
+
+class CDLLLoader;
 static CDLLLoader* s_pPluginLoader = nullptr;
 
 // Forward declarations for SteamStub
@@ -355,6 +355,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 
 extern "C" {
 
+// These errors are to be expected in the IDE.
 UC_CORE_API void UC_Core_Init()
 {
     s_pPluginLoader->ReadConfig();
