@@ -27,6 +27,10 @@
 #include "include/api/api_factory.h"
 #include "include/api/api_flat.h"
 
+// Compiler does NOT like it that these are at the end, way after where it wants to see them. So we are making it aware of the existence of these functions. This is just to shut it the fuck up and compile lol.
+void SetAppIDEnv();
+void WriteAppIDFile();
+
 // ============================================================
 // Global variable definitions
 // ============================================================
