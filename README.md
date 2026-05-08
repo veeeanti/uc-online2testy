@@ -1,6 +1,6 @@
 # uc-online2
 
-Custom modified Steam API .dll for Steam games to spoof your game as Spacewar. Drop-in replacement for `steam_api.dll` / `steam_api64.dll`.
+Custom modified Steam API .dll for Steam games to spoof your game as Spacewar. Drop-in replacement for `steam_api.dll` / `steam_api64.dll`. Now has its own "client"! (AKA Core)
 
 ## Usage
 

@@ -92,6 +92,85 @@ uintp g_CtxCounter = 0;
 
 static UC_Core_Init_t g_pfnCoreInit = nullptr;
 static UC_Core_Shutdown_t g_pfnCoreShutdown = nullptr;
+bool GetSteamPathFromRegistry(char* outPath, size_t pathSize)
+{
+    // First try the hardcoded common Steam installation path
+    const char* hardcodedPath = "C:\\Program Files (x86)\\Steam";
+    if (strlen(hardcodedPath) < pathSize)
+    {
+        strcpy_s(outPath, pathSize, hardcodedPath);
+        
+        // Verify the path exists and contains Steam executable
+        char steamExePath[MAX_PATH];
+        _snprintf_s(steamExePath, MAX_PATH, _TRUNCATE, "%s\\Steam.exe", hardcodedPath);
+        
+        if (GetFileAttributesA(steamExePath) != INVALID_FILE_ATTRIBUTES)
+        {
+            // Ensure null-termination
+            outPath[pathSize - 1] = '\0';
+            
+            // Remove trailing backslash if present
+            size_t len = strlen(outPath);
+            if (len > 0 && (outPath[len-1] == '\\' || outPath[len-1] == '/'))
+            {
+                outPath[len-1] = '\0';
+            }
+            
+            return true;
+        }
+    }
+    
+    // Fallback to registry detection
+    HKEY hKey = nullptr;
+    LONG result;
+    
+    // Try the 64-bit registry key first
+    result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Valve\\Steam", 0, KEY_READ, &hKey);
+    if (result != ERROR_SUCCESS)
+    {
+        // Try the 32-bit registry key
+        result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Valve\\Steam", 0, KEY_READ, &hKey);
+        if (result != ERROR_SUCCESS)
+        {
+            // Try alternative registry locations
+            result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 228980", 0, KEY_READ, &hKey);
+            if (result != ERROR_SUCCESS)
+            {
+                result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 228980", 0, KEY_READ, &hKey);
+            }
+        }
+    }
+    
+    if (result != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    DWORD type = 0;
+    DWORD size = (DWORD)pathSize;
+    
+    // Try to get InstallPath first
+    result = RegQueryValueExA(hKey, "InstallPath", nullptr, &type, (LPBYTE)outPath, &size);
+    
+    // If InstallPath doesn't exist or failed, try other common values
+    if (result != ERROR_SUCCESS || type != REG_SZ)
+    {
+        // Try InstallLocation as alternative
+        result = RegQueryValueExA(hKey, "InstallLocation", nullptr, &type, (LPBYTE)outPath, &size);
+    }
+    
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS || type != REG_SZ)
+    {
+        return false;
+    }
+
+    // Ensure null-termination
+    outPath[pathSize - 1] = '\0';
+    
+    return true;
+}
 
 // ============================================================
 // SteamInternal_ContextInit
