@@ -162,9 +162,34 @@ void UCOColor(WORD color, const char* text)
 #endif
 }
 
-void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface);
-void LoadBreakpadSymbols(HMODULE hMod);
-void UpdateMinidumpSteamID(uint64 sid);
+void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
+{
+    UCOLOG("[UCOnline2] InitSteamClient -> %s", iface);
+    
+    const char* steamClientPath = "steamclient.dll";
+#if defined(_M_AMD64)
+    steamClientPath = "steamclient64.dll";
+#endif
+    
+    HMODULE hMod = LoadLibraryA(steamClientPath);
+    if (!hMod)
+    {
+        UCOColor(FOREGROUND_RED | FOREGROUND_INTENSITY, "[UCOnline2] Failed to load steamclient.dll\r\n");
+        return nullptr;
+    }
+    
+    if (phMod)
+        *phMod = hMod;
+    
+    Fn_CreateInterface pfnCreateInterface = (Fn_CreateInterface)GetProcAddress(hMod, "CreateInterface");
+    if (!pfnCreateInterface)
+    {
+        UCOColor(FOREGROUND_RED | FOREGROUND_INTENSITY, "[UCOnline2] Failed to get CreateInterface\r\n");
+        return nullptr;
+    }
+    
+    return pfnCreateInterface(iface, nullptr);
+}
 
 // ============================================================
 // LoadGameOverlay
