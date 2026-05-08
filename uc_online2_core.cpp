@@ -39,36 +39,67 @@ static void SteamStub_Init();
 // Logging
 // ============================================================
 
-#ifdef _DEBUG
+static FILE* g_logFile = nullptr;
+static CRITICAL_SECTION g_logLock;
+
+static void InitializeLogging()
+{
+    InitializeCriticalSection(&g_logLock);
+    
+    char logPath[MAX_PATH] = { 0 };
+    DWORD len = GetTempPathA(MAX_PATH, logPath);
+    if (len == 0 || len > (MAX_PATH - 25)) 
+        return;
+
+    if (!PathAppendA(logPath, "uc_online2.log")) 
+        return;
+
+    fopen_s(&g_logFile, logPath, "ab");
+}
+
+static void ShutdownLogging()
+{
+    if (g_logFile)
+    {
+        fclose(g_logFile);
+        g_logFile = nullptr;
+    }
+    DeleteCriticalSection(&g_logLock);
+}
 
 static void UCOLogImpl(const char* fmt, va_list args)
 {
+    if (!g_logFile) 
+        return;
+
+    EnterCriticalSection(&g_logLock);
+
     char msg[2048] = { 0 };
     _vsnprintf_s(msg, sizeof(msg), _TRUNCATE, fmt, args);
-
-    char logPath[MAX_PATH] = { 0 };
-    DWORD len = GetTempPathA(MAX_PATH, logPath);
-    if (len == 0 || len > (MAX_PATH - 25)) return;
-
-    if (!PathAppendA(logPath, "uc_online2.log")) return;
-
-    FILE* f = nullptr;
-    if (fopen_s(&f, logPath, "ab") != 0 || !f) return;
 
     SYSTEMTIME st = { 0 };
     GetLocalTime(&st);
 
-    fprintf(f, "[%04u-%02u-%02u %02u:%02u:%02u.%03u] %s",
+    fprintf(g_logFile, "[%04u-%02u-%02u %02u:%02u:%02u.%03u] %s",
         st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, msg);
 
     size_t msgLen = strlen(msg);
     if (msgLen == 0 || msg[msgLen - 1] != '\n')
-        fputs("\r\n", f);
+    {
+        fputs("\r\n", g_logFile);
+        fflush(g_logFile);
+    }
 
-    fclose(f);
+    LeaveCriticalSection(&g_logLock);
 }
 
-#endif
+void UCOLOG(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    UCOLogImpl(fmt, args);
+    va_end(args);
+}
 
 // Minimal CGameID implementation for AppID file
 struct CGameID
@@ -78,17 +109,6 @@ struct CGameID
     CGameID(uint32_t nAppID) : m_ulGameID(nAppID) {}
     uint64_t ToUint64() const { return m_ulGameID; }
 };
-
-void UCOLOG(const char* fmt, ...)
-{
-#ifdef _DEBUG
-    if (!fmt) return;
-    va_list args;
-    va_start(args, fmt);
-    UCOLogImpl(fmt, args);
-    va_end(args);
-#endif
-}
 
 // ============================================================
 // SteamStub Implementation
@@ -343,15 +363,18 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     if (dwReason == DLL_PROCESS_ATTACH)
     {
         g_hModule = hModule;
+        InitializeLogging();
         s_pPluginLoader = new CDLLLoader();
     }
     else if (dwReason == DLL_PROCESS_DETACH)
     {
         if (s_pPluginLoader)
         {
+            s_pPluginLoader->UnloadAll();
             delete s_pPluginLoader;
             s_pPluginLoader = nullptr;
         }
+        ShutdownLogging();
     }
     return TRUE;
 }
@@ -361,9 +384,13 @@ extern "C" {
 // These errors are to be expected in the IDE.
 UC_CORE_API void UC_Core_Init()
 {
+    UCOLOG("[UCOnline2] UC_Core_Init called");
+    
     s_pPluginLoader->ReadConfig();
     s_ForcedAppId = s_pPluginLoader->GetAppId();
     s_OriginalAppId = s_pPluginLoader->GetOgAppId();
+
+    UCOLOG("[UCOnline2] AppID: %u, Original AppID: %u", s_ForcedAppId, s_OriginalAppId);
 
     UC_Core_SetAppIDEnv();
     UC_Core_WriteAppIDFile();
@@ -372,10 +399,19 @@ UC_CORE_API void UC_Core_Init()
     UCOLOG("[UCOnline2] %zu plugin(s) loaded", s_pPluginLoader->LoadedCount());
 
     g_bSteamStubEnabled = s_pPluginLoader->GetSteamStubEnabled();
+    UCOLOG("[UCOnline2] SteamStub enabled: %s", g_bSteamStubEnabled ? "true" : "false");
+    
     if (g_bSteamStubEnabled)
     {
+        UCOLOG("[UCOnline2] Initializing SteamStub");
         SteamStub_Init();
     }
+    else
+    {
+        UCOLOG("[UCOnline2] SteamStub disabled, skipping initialization");
+    }
+    
+    UCOLOG("[UCOnline2] UC_Core_Init completed");
 }
 
 UC_CORE_API void UC_Core_Shutdown()

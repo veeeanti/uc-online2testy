@@ -14,30 +14,56 @@
 
 LSTATUS GetRegistryDWORD(const char* cszPath, const char* cszKey, DWORD& dwValue)
 {
-	HKEY hKeyNode = nullptr;
-	DWORD dwType = REG_DWORD;
-	DWORD dwSize = sizeof(DWORD);
+    HKEY hKeyNode = nullptr;
+    DWORD dwType = REG_DWORD;
+    DWORD dwSize = sizeof(DWORD);
 
-	LSTATUS GetRegKey = ERROR_SUCCESS;
+    LSTATUS GetRegKey = ERROR_SUCCESS;
 
-	GetRegKey = RegOpenKeyExA(HKEY_CURRENT_USER, cszPath, 0, KEY_READ, &hKeyNode);
+    // Try to open the key in the local machine registry (where Steam is actually installed)
+    GetRegKey = RegOpenKeyExA(HKEY_LOCAL_MACHINE, cszPath, 0, KEY_READ | KEY_WOW64_32KEY, &hKeyNode);
+    if (GetRegKey != ERROR_SUCCESS)
+    {
+        // Try the 64-bit view
+        GetRegKey = RegOpenKeyExA(HKEY_LOCAL_MACHINE, cszPath, 0, KEY_READ | KEY_WOW64_64KEY, &hKeyNode);
+        if (GetRegKey != ERROR_SUCCESS)
+        {
+            return GetRegKey;
+        }
+    }
 
-	if (GetRegKey != ERROR_SUCCESS)
-		return GetRegKey;
+    GetRegKey = RegQueryValueExA(hKeyNode, cszKey, nullptr, &dwType, (LPBYTE)&dwValue, &dwSize);
 
-	GetRegKey = RegQueryValueExA(hKeyNode, cszKey, nullptr, &dwType, (LPBYTE)&dwValue, &dwSize);
+    RegCloseKey(hKeyNode);
 
-	RegCloseKey(hKeyNode);
-
-	return GetRegKey;
+    return GetRegKey;
 }
 
 LSTATUS GetRegistryString(const char* cszPath, const char* cszKey, char* szString, unsigned int uMaxBuf)
 {
-	DWORD dwType = REG_SZ;
-	DWORD dwSize = uMaxBuf;
+    DWORD dwType = REG_SZ;
+    DWORD dwSize = uMaxBuf;
 
-	LSTATUS GetRegKey = RegGetValueA(HKEY_CURRENT_USER, cszPath, cszKey, RRF_RT_REG_SZ, &dwType, szString, &dwSize);
+    LSTATUS GetRegKey = ERROR_SUCCESS;
+    HKEY hKeyNode = nullptr;
 
-	return GetRegKey;
+    // Try to open the key in the local machine registry (where Steam is actually installed)
+    GetRegKey = RegOpenKeyExA(HKEY_LOCAL_MACHINE, cszPath, 0, KEY_READ | KEY_WOW64_32KEY, &hKeyNode);
+    if (GetRegKey != ERROR_SUCCESS)
+    {
+        // Try the 64-bit view
+        GetRegKey = RegOpenKeyExA(HKEY_LOCAL_MACHINE, cszPath, 0, KEY_READ | KEY_WOW64_64KEY, &hKeyNode);
+        if (GetRegKey != ERROR_SUCCESS)
+        {
+            return GetRegKey;
+        }
+    }
+
+    if (GetRegKey == ERROR_SUCCESS)
+    {
+        GetRegKey = RegQueryValueExA(hKeyNode, cszKey, nullptr, &dwType, (LPBYTE)szString, &dwSize);
+        RegCloseKey(hKeyNode);
+    }
+
+    return GetRegKey;
 }

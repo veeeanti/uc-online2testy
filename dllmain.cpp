@@ -20,6 +20,7 @@
 // Compiler does NOT like it that these are at the end, way after where it wants to see them. So we are making it aware of the existence of these functions. This is just to shut it the fuck up and compile lol.
 void SetAppIDEnv();
 void WriteAppIDFile();
+bool GetSteamPathFromRegistry(char* outPath, size_t pathSize);
 
 #include "include/api/api_callbacks.h"
 #include "include/api/api_client.h"
@@ -166,16 +167,67 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
 {
     UCOLOG("[UCOnline2] InitSteamClient -> %s", iface);
     
+    // Get the Steam installation path from registry (avoids Steam API call before init)
+    char steamPath[MAX_PATH] = {0};
+    if (GetSteamPathFromRegistry(steamPath, MAX_PATH))
+    {
+        UCOLOG("[UCOnline2] Using Steam path from registry: %s", steamPath);
+    }
+    else
+    {
+        // Fallback to current directory if we can't get Steam path
+        strcpy_s(steamPath, ".");
+        UCOLOG("[UCOnline2] Steam path unavailable from registry, using current directory");
+    }
+
     const char* steamClientPath = "steamclient.dll";
 #if defined(_M_AMD64)
     steamClientPath = "steamclient64.dll";
 #endif
     
-    HMODULE hMod = LoadLibraryA(steamClientPath);
+    // Build full path to steamclient.dll
+    char fullPath[MAX_PATH] = {0};
+    if (strcmp(steamPath, ".") == 0)
+    {
+        strcpy_s(fullPath, steamClientPath);
+    }
+    else
+    {
+        // Use _snprintf_s which is available
+        size_t len = strlen(steamPath);
+        if (len > 0 && steamPath[len-1] != '\\' && steamPath[len-1] != '/')
+        {
+            _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", steamPath, steamClientPath);
+        }
+        else
+        {
+            _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s%s", steamPath, steamClientPath);
+        }
+    }
+    
+    UCOLOG("[UCOnline2] Loading Steam client from: %s", fullPath);
+    
+    HMODULE hMod = LoadLibraryA(fullPath);
     if (!hMod)
     {
-        UCOColor(FOREGROUND_RED | FOREGROUND_INTENSITY, "[UCOnline2] Failed to load steamclient.dll\r\n");
-        return nullptr;
+        UCOLOG("[UCOnline2] Failed to load steamclient.dll from %s (error %lu)", fullPath, GetLastError());
+        
+        // Try fallback to just the filename (let Windows search PATH)
+        UCOLOG("[UCOnline2] Trying to load steamclient.dll from system PATH");
+        hMod = LoadLibraryA(steamClientPath);
+        if (!hMod)
+        {
+            UCOLOG("[UCOnline2] Failed to load steamclient.dll from PATH (error %lu)", GetLastError());
+            return nullptr;
+        }
+        else
+        {
+            UCOLOG("[UCOnline2] Successfully loaded steamclient.dll from PATH");
+        }
+    }
+    else
+    {
+        UCOLOG("[UCOnline2] Successfully loaded steamclient.dll from Steam directory");
     }
     
     if (phMod)
@@ -184,11 +236,16 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
     Fn_CreateInterface pfnCreateInterface = (Fn_CreateInterface)GetProcAddress(hMod, "CreateInterface");
     if (!pfnCreateInterface)
     {
-        UCOColor(FOREGROUND_RED | FOREGROUND_INTENSITY, "[UCOnline2] Failed to get CreateInterface\r\n");
+        UCOLOG("[UCOnline2] Failed to get CreateInterface from steamclient.dll");
         return nullptr;
     }
     
-    return pfnCreateInterface(iface, nullptr);
+    UCOLOG("[UCOnline2] Got CreateInterface: 0x%p", pfnCreateInterface);
+    
+    void* result = pfnCreateInterface(iface, nullptr);
+    UCOLOG("[UCOnline2] CreateInterface returned: 0x%p for interface %s", result, iface);
+    
+    return result;
 }
 
 // ============================================================
@@ -210,28 +267,31 @@ static void LoadGameOverlay()
         HMODULE hOverlay = GetModuleHandleW(L"GameOverlayRenderer64.dll");
     #endif
 
-    if (forcedAppId != 769 && !hOverlay)
-    {
-        const char* installPath = SteamAPI_GetSteamInstallPath();
-        if (_stricmp(installPath, "UCOnline2_InvalidPath") != 0)
+        if (forcedAppId != 769 && !hOverlay)
         {
-            char overlayPath[MAX_PATH] = { 0 };
-            #if defined(_M_IX86)
-                _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer.dll", installPath);
-            #elif defined(_M_AMD64)
-                _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer64.dll", installPath);
-            #endif
-            HMODULE hLoaded = LoadLibraryExA(overlayPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-            if (hLoaded)
+            char installPath[MAX_PATH] = {0};
+            if (GetSteamPathFromRegistry(installPath, MAX_PATH))
             {
-                UCOLOG("[UCOnline2] Loaded game overlay: %s", overlayPath);
-            }
-            else
-            {
-                UCOLOG("[UCOnline2] Failed to load game overlay: %s (error %lu)", overlayPath, GetLastError());
+                if (_stricmp(installPath, "UCOnline2_InvalidPath") != 0)
+                {
+                    char overlayPath[MAX_PATH] = { 0 };
+                    #if defined(_M_IX86)
+                        _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer.dll", installPath);
+                    #elif defined(_M_AMD64)
+                        _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer64.dll", installPath);
+                    #endif
+                    HMODULE hLoaded = LoadLibraryExA(overlayPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+                    if (hLoaded)
+                    {
+                        UCOLOG("[UCOnline2] Loaded game overlay: %s", overlayPath);
+                    }
+                    else
+                    {
+                        UCOLOG("[UCOnline2] Failed to load game overlay: %s (error %lu)", overlayPath, GetLastError());
+                    }
+                }
             }
         }
-    }
 #endif
 }
 
@@ -244,6 +304,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     if (dwReason == DLL_PROCESS_ATTACH)
     {
         UCOLOG("[UCOnline2] DllMain -> DLL_PROCESS_ATTACH");
+        UCOLOG("[UCOnline2] Module handle: 0x%p", hModule);
 
         InitializeSRWLock(&g_CtxLock);
         InitializeSRWLock(&g_CallbackLock);
@@ -252,56 +313,120 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         char corePath[MAX_PATH] = { 0 };
         DWORD len = GetModuleFileNameA(hModule, corePath, sizeof(corePath));
         if (len == 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+        {
+            UCOLOG("[UCOnline2] Failed to get module filename, error: %lu", GetLastError());
             return FALSE;
+        }
+        UCOLOG("[UCOnline2] Module path: %s", corePath);
 
         if (!PathRemoveFileSpecA(corePath))
+        {
+            UCOLOG("[UCOnline2] Failed to remove file spec from path");
             return FALSE;
+        }
+        UCOLOG("[UCOnline2] Module directory: %s", corePath);
 
         #if defined(_M_IX86)
             _snprintf_s(corePath, MAX_PATH, _TRUNCATE, "%s\\uc_online2_core.dll", corePath);
         #elif defined(_M_AMD64)
             _snprintf_s(corePath, MAX_PATH, _TRUNCATE, "%s\\uc_online2_core.dll", corePath);
         #endif
+        UCOLOG("[UCOnline2] Core DLL path: %s", corePath);
 
         g_CoreModule = LoadLibraryExA(corePath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (g_CoreModule)
         {
+            UCOLOG("[UCOnline2] Core DLL loaded successfully, handle: 0x%p", g_CoreModule);
+            
             g_pfnCoreInit = (UC_Core_Init_t)GetProcAddress(g_CoreModule, "UC_Core_Init");
             g_pfnCoreShutdown = (UC_Core_Shutdown_t)GetProcAddress(g_CoreModule, "UC_Core_Shutdown");
             UC_Core_GetAppId_t pfnGetAppId = (UC_Core_GetAppId_t)GetProcAddress(g_CoreModule, "UC_Core_GetAppId");
             UC_Core_GetOgAppId_t pfnGetOgAppId = (UC_Core_GetOgAppId_t)GetProcAddress(g_CoreModule, "UC_Core_GetOgAppId");
+
+            UCOLOG("[UCOnline2] Core function pointers - Init: 0x%p, Shutdown: 0x%p, GetAppId: 0x%p, GetOgAppId: 0x%p", 
+                   g_pfnCoreInit, g_pfnCoreShutdown, pfnGetAppId, pfnGetOgAppId);
 
             // Set defaults before core init
             g_ForcedAppId = 480;
             g_OriginalAppId = 0;
 
             if (g_pfnCoreInit)
+            {
+                UCOLOG("[UCOnline2] Calling UC_Core_Init");
                 g_pfnCoreInit();
+                UCOLOG("[UCOnline2] UC_Core_Init returned");
+            }
+            else
+            {
+                UCOLOG("[UCOnline2] UC_Core_Init function not found!");
+            }
 
             // Get the actual values from core after init
             if (pfnGetAppId)
+            {
                 g_ForcedAppId = pfnGetAppId();
+                UCOLOG("[UCOnline2] Retrieved AppID from core: %u", g_ForcedAppId);
+            }
+            else
+            {
+                UCOLOG("[UCOnline2] UC_Core_GetAppId function not found!");
+            }
+            
             if (pfnGetOgAppId)
+            {
                 g_OriginalAppId = pfnGetOgAppId();
+                UCOLOG("[UCOnline2] Retrieved Original AppID from core: %u", g_OriginalAppId);
+            }
+            else
+            {
+                UCOLOG("[UCOnline2] UC_Core_GetOgAppId function not found!");
+            }
+        }
+        else
+        {
+            UCOLOG("[UCOnline2] Failed to load core DLL: %s (error %lu)", corePath, GetLastError());
         }
 
         #ifdef _DEBUG
         g_ForcedAppId = 480;
         g_OriginalAppId = 0;
+        UCOLOG("[UCOnline2] Debug mode: Forced AppID reset to 480");
         #endif
 
         UCOLOG("[UCOnline2] PID: %lu", GetCurrentProcessId());
         UCOLOG("[UCOnline2] Thread: %lu", GetCurrentThreadId());
+        UCOLOG("[UCOnline2] Command line: %s", GetCommandLineA());
 
         LoadGameOverlay();
+        UCOLOG("[UCOnline2] Game overlay loading completed");
     }
     else if (dwReason == DLL_PROCESS_DETACH)
     {
+        UCOLOG("[UCOnline2] DllMain -> DLL_PROCESS_DETACH");
+        UCOLOG("[UCOnline2] Process exiting, cleaning up...");
+
         if (g_pfnCoreShutdown)
+        {
+            UCOLOG("[UCOnline2] Calling UC_Core_Shutdown");
             g_pfnCoreShutdown();
+            UCOLOG("[UCOnline2] UC_Core_Shutdown returned");
+        }
 
         if (g_CoreModule)
+        {
+            UCOLOG("[UCOnline2] Unloading core DLL");
             FreeLibrary(g_CoreModule);
+            g_CoreModule = nullptr;
+            UCOLOG("[UCOnline2] Core DLL unloaded");
+        }
+    }
+    else if (dwReason == DLL_THREAD_ATTACH)
+    {
+        UCOLOG("[UCOnline2] DllMain -> DLL_THREAD_ATTACH, Thread ID: %lu", GetCurrentThreadId());
+    }
+    else if (dwReason == DLL_THREAD_DETACH)
+    {
+        UCOLOG("[UCOnline2] DllMain -> DLL_THREAD_DETACH, Thread ID: %lu", GetCurrentThreadId());
     }
 
     return TRUE;
@@ -652,6 +777,38 @@ CCallbackDispatcher* GetDispatcher()
 // ============================================================
 // SetAppIDEnv / WriteAppIDFile (called by SteamAPI functions)
 // ============================================================
+
+bool GetSteamPathFromRegistry(char* outPath, size_t pathSize)
+{
+    HKEY hKey;
+    LONG result;
+    
+    // Try the 64-bit registry key first
+    result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Valve\\Steam", 0, KEY_READ, &hKey);
+    if (result != ERROR_SUCCESS)
+    {
+        // Try the 32-bit registry key
+        result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Valve\\Steam", 0, KEY_READ, &hKey);
+        if (result != ERROR_SUCCESS)
+        {
+            return false;
+        }
+    }
+
+    DWORD type = 0;
+    DWORD size = (DWORD)pathSize;
+    result = RegQueryValueExA(hKey, "InstallPath", nullptr, &type, (LPBYTE)outPath, &size);
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS || type != REG_SZ)
+    {
+        return false;
+    }
+
+    // Ensure null-termination
+    outPath[pathSize - 1] = '\0';
+    return true;
+}
 
 void SetAppIDEnv()
 {
