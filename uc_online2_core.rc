@@ -4,8 +4,8 @@
 IDI_ICON1 ICON "icon.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,4,0,0
- PRODUCTVERSION 1,4,0,0
+ FILEVERSION 1,5,0,0
+ PRODUCTVERSION 1,5,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -22,7 +22,7 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "veeanti | union-crax.xyz"
             VALUE "FileDescription", "uc-online2_core, uc-online2 'client' dll"
-            VALUE "FileVersion", "1.4.0.0"
+            VALUE "FileVersion", "1.5.0.0"
             VALUE "InternalName", "uc-online2_core"
             VALUE "LegalCopyright", "union-crax.xyz | veeanti 2026"
             #ifdef IS_64BIT
@@ -31,7 +31,7 @@ BEGIN
             VALUE "OriginalFilename", "uc-online2_core.dll"
             #endif
             VALUE "ProductName", "uc-online2_core"
-            VALUE "ProductVersion", "1.4.0.0"
+            VALUE "ProductVersion", "1.5.0.0"
             VALUE "Comments", "https://union-crax.xyz | https://vee-anti.xyz"
         END
     END

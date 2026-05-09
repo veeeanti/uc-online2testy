@@ -1,22 +1,24 @@
 # uc-online2
 
-Custom modified Steam API .dll for Steam games to spoof your game as Spacewar. Drop-in replacement for `steam_api.dll` / `steam_api64.dll`. Now has its own "client"! (AKA Core)
+Custom modified Steam API .dll for Steam games to spoof your game as Spacewar (or any other game). Drop-in replacement for `steam_api.dll` / `steam_api64.dll`. Now has its own "client"! (AKA Core)
 
 ## Usage
 
-__**If using downloaded .dlls from [Releases](https://github.com/veeeanti/uc-online2/releases):**__
-- 1. Extract the archive downloaded from __**LATEST**__ release (should be v1.0.1 as of currently writing this).
+__**If using downloaded .dlls from [Releases](https://github.com/unioncrax-team/uc-online2/releases):**__
+- 1. Extract the archive downloaded from __**LATEST**__ release (which is now v1.5.0).
 - 2. Copy the corresponding .dll to replace your original .dll.
    - 2a. Rename the original .dll before copying it to something else if you feel you must back it up, something like ``steam_api_o.dll`` as Goldberg Emu suggests or ``steam_api64.dll.old``. (It doesn't matter as long as it is just changed.)
-- 3. Make sure Steam is running first. Then try running the game as you normally would from the .exe. If it has SteamStub, use Steamless to remove it or use the .dll made to bypass it for games that Steamless cannot unpack. (Dave the Diver is an example.)
+- 3. Make sure Steam is running first. Then try running the game as you normally would from the .exe. If it has SteamStub, use Steamless to remove it or use the .dll made to bypass it for games that Steamless cannot unpack. (Dave the Diver is an example.) Or use "GetStubbedLol" in the ini.
    - 3a. If it throws an error related to auth failure, restart Steam and try again. If the error persists, contact me. I'll work with you to figure it out one way or another. 
 
 __**If using self built .dlls:**__
-- 1. Run `build.bat` or open `uc_online2.vcxproj` in Visual Studio.
+- 1. Run `build.bat` or open the `uc_online2.vcxproj` and `uc_online2_core.vcxproj` files in Visual Studio.
 - 2. Copy the output .dll to your game folder:
    - **32-bit:** `build\x86\steam_api.dll`
+                 `build\x86\uc_online2_core.dll`
    - **64-bit:** `build\x64\steam_api64.dll`
-- 3. Replace your `steam_api(64).dll` with one from here. Back it up if necessary by renaming it to `steam_api(64)_o.dll`.
+                 `build\x64\uc_online2_core64.dll`
+- 3. Replace your `steam_api(64).dll` with one from here. Back it up if necessary by renaming it to `steam_api(64)_o.dll`. **Make sure you copy the core dll alongside the other one!**
 
 ## Configuration
 
@@ -27,11 +29,15 @@ the game's code, try setting it to something else free that's multiplayer, like 
 
 ```ini
 [Settings]
-AppId=480
-ogAppId=220 # Half-life 2
-PluginsFolder=plugins
-GetStubbedLol=false
+AppId=480 # Spacewar
+ogAppId=220 # Half-Life 2
+PluginsFolder=plugins # Path relative to the exe
+GetStubbedLol=false # true / false, yes / no, 1 / 0
 ```
+
+## "ogAppId"
+
+This is an attempt to allow the overlay to force use the right game assets even when you very clearly are supposedly running Spacewar. Setting the original AppId here just gets calculated to the 64-bit Game ID string it expects (which I just learned about too...) and is used for the `SteamOverlayGameId` environment variable which could easily be run as a launch arg, but requires you knowing the long string of numbers for your game, so this just makes it way easier to set up. `SteamGameId` is not touched at all by this, as it can cause problems. It uses the `AppId` for that, except it also gets converted to the expected 64-bit Game ID string.
 
 ## Plugin Loader / Injector
 
@@ -52,10 +58,6 @@ rewrote it in C++ so I could try integrating it into this project and not need t
 If the function is disabled, or was never written in the first place, then it simply 
 will just ignore the function entirely and continue as it wassn't implemented in the
 first place.
-
-## "ogAppId"
-
-This is an attempt to allow the overlay to force use the right game assets even when you very clearly are supposedly running Spacewar. Setting the original AppId here just gets calculated to the 64-bit Game ID string it expects (which I just learned about too...) and is used for the `SteamOverlayGameId` environment variable which could easily be run as a launch arg, but requires you knowing the long string of numbers for your game, so this just makes it way easier to set up. `SteamGameId` is not touched at all by this, as it can cause problems. It uses the `AppId` for that, except it also gets converted to the expected 64-bit Game ID string.
 
 ## Building
 

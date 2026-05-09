@@ -324,8 +324,7 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
         UCOLOG("[UCOnline2] Registry lookup failed, trying hardcoded paths");
         // Fallback to hardcoded common paths
         const char* commonPaths[] = {
-            "C:\\Program Files (x86)\\Steam",
-            "C:\\Program Files\\Steam",
+            "C:\\Program Files (x86)\\Steam", // Literally the default path for like 99.9999999% of users
             "C:\\Steam"
         };
         
@@ -366,11 +365,13 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
     }
     
     UCOLOG("[UCOnline2] Using Steam path: %s", steamPath);
-    
-    const char* steamClientPath = "steamclient.dll";
-#if defined(_M_AMD64)
-    steamClientPath = "steamclient64.dll";
-#endif
+    #if defined(_M_IX86)
+        UCOLOG("[UCOnline2] Target architecture: x86");
+    const char* steamClientPath = "C:\\Program Files (x86)\\Steam\\steamclient.dll";
+    #else
+        UCOLOG("[UCOnline2] Target architecture: x64");
+    const char* steamClientPath = "C:\\Program Files (x86)\\Steam\\steamclient64.dll";
+    #endif
     
     // Build full path to steamclient.dll
     char fullPath[MAX_PATH] = {0};
@@ -457,9 +458,9 @@ static void LoadGameOverlay()
     }
     
     #if defined(_M_IX86)
-        HMODULE hOverlay = GetModuleHandleW(L"GameOverlayRenderer.dll");
+        HMODULE hOverlay = GetModuleHandleW(L"C:\\Program Files (x86)\\Steam\\GameOverlayRenderer.dll");
     #elif defined(_M_AMD64)
-        HMODULE hOverlay = GetModuleHandleW(L"GameOverlayRenderer64.dll");
+        HMODULE hOverlay = GetModuleHandleW(L"C:\\Program Files (x86)\\Steam\\GameOverlayRenderer64.dll");
     #endif
 
     if (forcedAppId != 769 && !hOverlay)

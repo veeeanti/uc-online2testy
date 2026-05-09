@@ -1,6 +1,11 @@
 /**
- *  Core loader interface for the secondary DLL.
- *  This provides the functions that steam_api.dll will call into.
+ *  This is the replacement for dll_loader.h, which was no longer named correctly
+ *  and was a mess of different features that I just threw in there without thinking
+ *  about anything. This is the header for uc_online2_core, which is the 'client' dll
+ *  that now handles everything that was written in the old dll_loader header and then
+ *  some. All that's here now is the declarations for the core DLL's exported functions, 
+ *  the actual code for plugin injection/loading, steamstubbed, some appid stuff, are
+ *  all located in the uc_online2_core.cpp and dllmain.cpp files. 
  *
  *  ~veeλnti<3 2026
  */

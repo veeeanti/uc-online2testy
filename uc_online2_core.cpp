@@ -116,6 +116,7 @@ struct CGameID
 
 #include <intrin.h>
 #include "include/MinHook.h"
+#include <algorithm>
 
 static std::atomic<uint32_t> g_SteamStubCount{ 0 };
 static constexpr uint32_t STEAM_STUB_MAX_COUNT = 1;
@@ -194,11 +195,33 @@ static void SteamStub_Init()
 // CDLLLoader (duplicated here for core DLL)
 // ============================================================
 
+struct PluginInfo
+{
+    HMODULE hModule;
+    std::string name;
+    std::string path;
+    uint32_t loadOrder;
+    bool loaded;
+    DWORD loadError;
+};
+
 class CDLLLoader
 {
 private:
-    std::vector<HMODULE> m_Modules;
+    std::vector<PluginInfo> m_Modules;
     char m_IniPath[MAX_PATH];
+
+    static uint32_t ParseLoadOrder(const char* name)
+    {
+        uint32_t order = 0;
+        const char* p = name;
+        while (*p && isdigit((unsigned char)*p))
+        {
+            order = order * 10 + (*p - '0');
+            p++;
+        }
+        return order;
+    }
 
 public:
     CDLLLoader() { m_IniPath[0] = '\0'; }
@@ -280,78 +303,126 @@ public:
 
         DWORD folderAttribs = GetFileAttributesA(dllPath);
         if (folderAttribs == INVALID_FILE_ATTRIBUTES || !(folderAttribs & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            UCOLOG("[UCOnline2] Plugins folder not found: %s", dllPath);
             return;
+        }
 
         char findPattern[MAX_PATH] = { 0 };
         if (_snprintf_s(findPattern, MAX_PATH, _TRUNCATE, "%s\\*.dll", dllPath) == _TRUNCATE)
             return;
 
-        std::vector<std::string> names;
-        std::vector<std::string> paths;
+        std::vector<PluginInfo> plugins;
 
         WIN32_FIND_DATAA fd = { 0 };
         HANDLE hFind = FindFirstFileA(findPattern, &fd);
 
         if (hFind == INVALID_HANDLE_VALUE)
+        {
+            UCOLOG("[UCOnline2] No plugins found in: %s", dllPath);
             return;
+        }
 
         do
         {
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
                 continue;
 
+            if (_stricmp(fd.cFileName, "union-crax.ini") == 0)
+                continue;
+
             char fullPath[MAX_PATH] = { 0 };
             if (_snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", dllPath, fd.cFileName) == _TRUNCATE)
                 continue;
 
-            names.push_back(fd.cFileName);
-            paths.push_back(fullPath);
+            PluginInfo info;
+            info.name = fd.cFileName;
+            info.path = fullPath;
+            info.loadOrder = ParseLoadOrder(fd.cFileName);
+            info.loaded = false;
+            info.loadError = 0;
+            plugins.push_back(info);
         } while (FindNextFileA(hFind, &fd));
 
         FindClose(hFind);
 
-        for (size_t i = 0; i < names.size(); i++)
+        if (plugins.empty())
         {
-            size_t minIdx = i;
-            for (size_t j = i + 1; j < names.size(); j++)
-            {
-                if (_stricmp(names[j].c_str(), names[minIdx].c_str()) < 0)
-                    minIdx = j;
-            }
-
-            if (minIdx != i)
-            {
-                std::swap(names[i], names[minIdx]);
-                std::swap(paths[i], paths[minIdx]);
-            }
+            UCOLOG("[UCOnline2] No plugin DLLs found in: %s", dllPath);
+            return;
         }
 
-        for (size_t i = 0; i < names.size(); i++)
+        std::sort(plugins.begin(), plugins.end(), [](const PluginInfo& a, const PluginInfo& b) {
+            if (a.loadOrder != b.loadOrder)
+                return a.loadOrder < b.loadOrder;
+            return _stricmp(a.name.c_str(), b.name.c_str()) < 0;
+        });
+
+        uint32_t successful = 0;
+        uint32_t failed = 0;
+
+        for (auto& plugin : plugins)
         {
-            HMODULE hMod = LoadLibraryExA(paths[i].c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+            UCOLOG("[UCOnline2] Loading plugin: %s (order: %u)", plugin.name.c_str(), plugin.loadOrder);
+
+            HMODULE hMod = LoadLibraryExA(plugin.path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
             if (hMod)
             {
-                m_Modules.push_back(hMod);
-                UCOLOG("[UCOnline2] Loaded plugin: %s", names[i].c_str());
+                plugin.hModule = hMod;
+                plugin.loaded = true;
+                m_Modules.push_back(plugin);
+                successful++;
+                UCOLOG("[UCOnline2] Loaded plugin: %s (0x%p)", plugin.name.c_str(), hMod);
             }
             else
             {
-                UCOLOG("[UCOnline2] Failed to load plugin: %s (error %lu)", names[i].c_str(), GetLastError());
+                plugin.loadError = GetLastError();
+                failed++;
+                UCOLOG("[UCOnline2] Failed to load plugin: %s (error %lu)", plugin.name.c_str(), plugin.loadError);
             }
         }
+
+        UCOLOG("[UCOnline2] Plugin loading complete: %u loaded, %u failed", successful, failed);
     }
 
     void UnloadAll()
     {
-        for (size_t i = 0; i < m_Modules.size(); i++)
+        for (auto it = m_Modules.begin(); it != m_Modules.end(); ++it)
         {
-            if (m_Modules[i])
-                FreeLibrary(m_Modules[i]);
+            if (it->hModule)
+                FreeLibrary(it->hModule);
         }
         m_Modules.clear();
     }
 
+    void UnloadPlugin(const char* name)
+    {
+        for (auto it = m_Modules.begin(); it != m_Modules.end(); ++it)
+        {
+            if (it->name == name && it->hModule)
+            {
+                FreeLibrary(it->hModule);
+                it->hModule = nullptr;
+                it->loaded = false;
+                UCOLOG("[UCOnline2] Unloaded plugin: %s", name);
+                return;
+            }
+        }
+    }
+
+    bool IsPluginLoaded(const char* name) const
+    {
+        for (const auto& mod : m_Modules)
+        {
+            if (mod.name == name && mod.loaded)
+                return true;
+        }
+        return false;
+    }
+
     size_t LoadedCount() const { return m_Modules.size(); }
+    size_t SuccessCount() const { size_t count = 0; for (const auto& m : m_Modules) if (m.loaded) count++; return count; }
+    size_t FailCount() const { size_t count = 0; for (const auto& m : m_Modules) if (!m.loaded) count++; return count; }
 };
 
 // ============================================================
@@ -381,7 +452,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 
 extern "C" {
 
-// These errors are to be expected in the IDE.
+// If these are giving errors, check for duplicates of '#include "uc_loader.h"' or '#define UC_CORE_EXPORTS', that's usually the cause and I didn't catch it until a while ago. ~vλ
 UC_CORE_API void UC_Core_Init()
 {
     UCOLOG("[UCOnline2] UC_Core_Init called");
@@ -396,7 +467,7 @@ UC_CORE_API void UC_Core_Init()
     UC_Core_WriteAppIDFile();
 
     s_pPluginLoader->LoadPlugins();
-    UCOLOG("[UCOnline2] %zu plugin(s) loaded", s_pPluginLoader->LoadedCount());
+    UCOLOG("[UCOnline2] %zu plugins loaded (%zu success, %zu failed)", s_pPluginLoader->LoadedCount(), s_pPluginLoader->SuccessCount(), s_pPluginLoader->FailCount());
 
     g_bSteamStubEnabled = s_pPluginLoader->GetSteamStubEnabled();
     UCOLOG("[UCOnline2] SteamStub enabled: %s", g_bSteamStubEnabled ? "true" : "false");
