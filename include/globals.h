@@ -20,7 +20,35 @@ const uint32 k_unServerFlagNone    = 0x00;
 const uint32 k_unServerFlagSecure  = 0x01;
 const uint32 k_unServerFlagPrivate = 0x02;
 
-class ISteamGameSearch { public: virtual ~ISteamGameSearch() {} };
+#include "include/sdk/isteamgamesearch.h"
+
+const uint32 k_unServerFlagNone    = 0x00;
+const uint32 k_unServerFlagSecure  = 0x01;
+const uint32 k_unServerFlagPrivate = 0x02;
+
+// Stub implementation of ISteamGameSearch - all methods are no-ops
+class CSteamGameSearchStub : public ISteamGameSearch
+{
+public:
+	virtual void AddGameSearchParams( const char *, const char * ) override {}
+	virtual void SearchForLobbyWithGameFilters( CSteamID, int, int, int, int ) override {}
+	virtual uint32 GetTotalPlayersInLobby( CSteamID ) override { return 0; }
+	virtual uint32 GetNumAvailableSlotsInLobby( CSteamID ) override { return 0; }
+	virtual void SubmitPlayerResult( uint64, CSteamID, int, EPlayerResultToken ) override {}
+	virtual void EndGameSearch( uint64 ) override {}
+	virtual void SetGameTags( const char **, uint32 ) override {}
+	virtual uint32 GetGameTags( char *, uint32 ) override { return 0; }
+	virtual uint32 GetNumPlayersSearching() override { return 0; }
+	virtual SteamAPICall_t RequestPlayersForLobby( uint64 ) override { return k_uAPICallInvalid; }
+	virtual bool IsGameSearchInProgress() override { return false; }
+	virtual uint32 GetPlayersInGameSearchResult( uint32 ) override { return 0; }
+	virtual CSteamID GetPlayerInGameSearchResult( uint32, uint32 ) override { return k_steamIDNil; }
+	virtual bool GetPlayerGameSearchResultData( uint32, uint32, const char *, char *, uint32 ) override { return false; }
+	virtual uint32 GetPlayerGameSearchResultCount( uint32, uint32 ) override { return 0; }
+};
+
+// Global stub instance
+static CSteamGameSearchStub s_GameSearchStub;
 
 class CSteamAPIContext
 {
@@ -71,7 +99,7 @@ public:
 		m_pSteamController = (ISteamController*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMCONTROLLER_INTERFACE_VERSION);
 		m_pSteamUGC = (ISteamUGC*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMUGC_INTERFACE_VERSION);
 		m_pSteamMusic = (ISteamMusic*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMMUSIC_INTERFACE_VERSION);
-		m_pSteamGameSearch = nullptr;
+		m_pSteamGameSearch = &s_GameSearchStub;
 		m_pSteamParties = (ISteamParties*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMPARTIES_INTERFACE_VERSION);
 		m_pSteamRemotePlay = (ISteamRemotePlay*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMREMOTEPLAY_INTERFACE_VERSION);
 		m_pSteamTimeline = (ISteamTimeline*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMTIMELINE_INTERFACE_VERSION);

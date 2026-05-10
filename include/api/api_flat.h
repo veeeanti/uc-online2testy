@@ -8231,3 +8231,112 @@ S_API SteamAPICall_t S_CALLTYPE SteamAPI_ISteamGameServerStats_StoreUserStats(in
 		__debugbreak();
 	return g_ServerCtx.SteamGameServerStats()->StoreUserStats(steamIDUser);
 }
+
+// ============================================================
+// ISteamGameSearch - flat C API exports
+// ============================================================
+
+S_API intptr_t S_CALLTYPE SteamAPI_ISteamClient_GetISteamGameSearch(intptr_t instancePtr, HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+{
+	return (intptr_t)g_ClientCtx.SteamGameSearch();
+}
+
+S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_AddGameSearchParams(intptr_t instancePtr, const char *pchKeyToFind, const char *pchValueToFind)
+{
+	if (g_bClientReady)
+		g_ClientCtx.SteamGameSearch()->AddGameSearchParams(pchKeyToFind, pchValueToFind);
+}
+
+S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_SearchForLobbyWithGameFilters(intptr_t instancePtr, class CSteamID steamIDLobby, int nPlayerMin, int nPlayerMax, int nSearchSlots, int nPreferredSlots)
+{
+	if (g_bClientReady)
+		g_ClientCtx.SteamGameSearch()->SearchForLobbyWithGameFilters(steamIDLobby, nPlayerMin, nPlayerMax, nSearchSlots, nPreferredSlots);
+}
+
+S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetTotalPlayersInLobby(intptr_t instancePtr, class CSteamID steamIDLobby)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetTotalPlayersInLobby(steamIDLobby);
+	return 0;
+}
+
+S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetNumAvailableSlotsInLobby(intptr_t instancePtr, class CSteamID steamIDLobby)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetNumAvailableSlotsInLobby(steamIDLobby);
+	return 0;
+}
+
+S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_SubmitPlayerResult(intptr_t instancePtr, uint64 ulSearchID, class CSteamID steamIDPlayer, int nScore, int nResult)
+{
+	if (g_bClientReady)
+		g_ClientCtx.SteamGameSearch()->SubmitPlayerResult(ulSearchID, steamIDPlayer, nScore, (EPlayerResultToken)nResult);
+}
+
+S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_EndGameSearch(intptr_t instancePtr, uint64 ulSearchID)
+{
+	if (g_bClientReady)
+		g_ClientCtx.SteamGameSearch()->EndGameSearch(ulSearchID);
+}
+
+S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_SetGameTags(intptr_t instancePtr, const char **pchGameTags, uint32 nGameTags)
+{
+	if (g_bClientReady)
+		g_ClientCtx.SteamGameSearch()->SetGameTags(pchGameTags, nGameTags);
+}
+
+S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetGameTags(intptr_t instancePtr, char *pchGameTags, uint32 cchGameTags)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetGameTags(pchGameTags, cchGameTags);
+	return 0;
+}
+
+S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetNumPlayersSearching(intptr_t instancePtr)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetNumPlayersSearching();
+	return 0;
+}
+
+S_API SteamAPICall_t S_CALLTYPE SteamAPI_ISteamGameSearch_RequestPlayersForLobby(intptr_t instancePtr, uint64 ulSearchID)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->RequestPlayersForLobby(ulSearchID);
+	return k_uAPICallInvalid;
+}
+
+S_API bool S_CALLTYPE SteamAPI_ISteamGameSearch_IsGameSearchInProgress(intptr_t instancePtr)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->IsGameSearchInProgress();
+	return false;
+}
+
+S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayersInGameSearchResult(intptr_t instancePtr, uint32 unSearchResultIndex)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetPlayersInGameSearchResult(unSearchResultIndex);
+	return 0;
+}
+
+S_API class CSteamID S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayerInGameSearchResult(intptr_t instancePtr, uint32 unSearchResultIndex, uint32 unPlayerIndex)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetPlayerInGameSearchResult(unSearchResultIndex, unPlayerIndex);
+	return k_steamIDNil;
+}
+
+S_API bool S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayerGameSearchResultData(intptr_t instancePtr, uint32 unSearchResultIndex, uint32 unPlayerIndex, const char *pchKeyToFind, char *pchValueFound, uint32 cchValueFound)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetPlayerGameSearchResultData(unSearchResultIndex, unPlayerIndex, pchKeyToFind, pchValueFound, cchValueFound);
+	return false;
+}
+
+S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayerGameSearchResultCount(intptr_t instancePtr, uint32 unSearchResultIndex, uint32 unPlayerIndex)
+{
+	if (g_bClientReady)
+		return g_ClientCtx.SteamGameSearch()->GetPlayerGameSearchResultCount(unSearchResultIndex, unPlayerIndex);
+	return 0;
+}

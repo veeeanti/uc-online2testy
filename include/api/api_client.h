@@ -215,6 +215,12 @@ S_API ESteamAPIInitResult S_CALLTYPE SteamInternal_SteamAPI_Init(const char* psz
 				if (g_bClientReady)
 				{
 					UCOLOG("[UCOnline2] SteamAPI_Init successful");
+
+					// Hook BIsSubscribedApp to always return true
+					// Fixes games with hardcoded AppID subscription checks (e.g. Godot games)
+					extern void InstallBIsSubscribedAppHook();
+					InstallBIsSubscribedAppHook();
+
 					return k_ESteamAPIInitResult_OK;
 				}
 				else
