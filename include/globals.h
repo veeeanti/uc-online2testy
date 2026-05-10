@@ -20,11 +20,28 @@ const uint32 k_unServerFlagNone    = 0x00;
 const uint32 k_unServerFlagSecure  = 0x01;
 const uint32 k_unServerFlagPrivate = 0x02;
 
-#include "include/sdk/isteamgamesearch.h"
-
-const uint32 k_unServerFlagNone    = 0x00;
-const uint32 k_unServerFlagSecure  = 0x01;
-const uint32 k_unServerFlagPrivate = 0x02;
+// Forward declare ISteamGameSearch with minimal stub interface
+// (full SDK header not included to avoid header conflicts)
+class ISteamGameSearch
+{
+public:
+	virtual ~ISteamGameSearch() {}
+	virtual void AddGameSearchParams(const char*, const char*) = 0;
+	virtual void SearchForLobbyWithGameFilters(class CSteamID, int, int, int, int) = 0;
+	virtual uint32 GetTotalPlayersInLobby(class CSteamID) = 0;
+	virtual uint32 GetNumAvailableSlotsInLobby(class CSteamID) = 0;
+	virtual void SubmitPlayerResult(uint64, class CSteamID, int, int) = 0;
+	virtual void EndGameSearch(uint64) = 0;
+	virtual void SetGameTags(const char**, uint32) = 0;
+	virtual uint32 GetGameTags(char*, uint32) = 0;
+	virtual uint32 GetNumPlayersSearching() = 0;
+	virtual uint64 RequestPlayersForLobby(uint64) = 0;
+	virtual bool IsGameSearchInProgress() = 0;
+	virtual uint32 GetPlayersInGameSearchResult(uint32) = 0;
+	virtual class CSteamID GetPlayerInGameSearchResult(uint32, uint32) = 0;
+	virtual bool GetPlayerGameSearchResultData(uint32, uint32, const char*, char*, uint32) = 0;
+	virtual uint32 GetPlayerGameSearchResultCount(uint32, uint32) = 0;
+};
 
 // Stub implementation of ISteamGameSearch - all methods are no-ops
 class CSteamGameSearchStub : public ISteamGameSearch
@@ -34,7 +51,7 @@ public:
 	virtual void SearchForLobbyWithGameFilters( CSteamID, int, int, int, int ) override {}
 	virtual uint32 GetTotalPlayersInLobby( CSteamID ) override { return 0; }
 	virtual uint32 GetNumAvailableSlotsInLobby( CSteamID ) override { return 0; }
-	virtual void SubmitPlayerResult( uint64, CSteamID, int, EPlayerResultToken ) override {}
+	virtual void SubmitPlayerResult( uint64, CSteamID, int, int ) override {}
 	virtual void EndGameSearch( uint64 ) override {}
 	virtual void SetGameTags( const char **, uint32 ) override {}
 	virtual uint32 GetGameTags( char *, uint32 ) override { return 0; }

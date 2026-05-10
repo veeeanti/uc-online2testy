@@ -8270,7 +8270,7 @@ S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetNumAvailableSlotsInLobby(in
 S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_SubmitPlayerResult(intptr_t instancePtr, uint64 ulSearchID, class CSteamID steamIDPlayer, int nScore, int nResult)
 {
 	if (g_bClientReady)
-		g_ClientCtx.SteamGameSearch()->SubmitPlayerResult(ulSearchID, steamIDPlayer, nScore, (EPlayerResultToken)nResult);
+		g_ClientCtx.SteamGameSearch()->SubmitPlayerResult(ulSearchID, steamIDPlayer, nScore, nResult);
 }
 
 S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_EndGameSearch(intptr_t instancePtr, uint64 ulSearchID)
@@ -8299,11 +8299,11 @@ S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetNumPlayersSearching(intptr_
 	return 0;
 }
 
-S_API SteamAPICall_t S_CALLTYPE SteamAPI_ISteamGameSearch_RequestPlayersForLobby(intptr_t instancePtr, uint64 ulSearchID)
+S_API uint64 S_CALLTYPE SteamAPI_ISteamGameSearch_RequestPlayersForLobby(intptr_t instancePtr, uint64 ulSearchID)
 {
 	if (g_bClientReady)
 		return g_ClientCtx.SteamGameSearch()->RequestPlayersForLobby(ulSearchID);
-	return k_uAPICallInvalid;
+	return 0;
 }
 
 S_API bool S_CALLTYPE SteamAPI_ISteamGameSearch_IsGameSearchInProgress(intptr_t instancePtr)
@@ -8320,11 +8320,10 @@ S_API uint32 S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayersInGameSearchResult(i
 	return 0;
 }
 
-S_API class CSteamID S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayerInGameSearchResult(intptr_t instancePtr, uint32 unSearchResultIndex, uint32 unPlayerIndex)
+S_API void S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayerInGameSearchResult(intptr_t instancePtr, uint32 unSearchResultIndex, uint32 unPlayerIndex, uint64* pOutSteamID)
 {
-	if (g_bClientReady)
-		return g_ClientCtx.SteamGameSearch()->GetPlayerInGameSearchResult(unSearchResultIndex, unPlayerIndex);
-	return k_steamIDNil;
+	if (g_bClientReady && pOutSteamID)
+		*pOutSteamID = g_ClientCtx.SteamGameSearch()->GetPlayerInGameSearchResult(unSearchResultIndex, unPlayerIndex).ConvertToUint64();
 }
 
 S_API bool S_CALLTYPE SteamAPI_ISteamGameSearch_GetPlayerGameSearchResultData(intptr_t instancePtr, uint32 unSearchResultIndex, uint32 unPlayerIndex, const char *pchKeyToFind, char *pchValueFound, uint32 cchValueFound)
