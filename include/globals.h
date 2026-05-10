@@ -64,8 +64,87 @@ public:
 	virtual uint32 GetPlayerGameSearchResultCount( uint32, uint32 ) override { return 0; }
 };
 
-// Global stub instance
+// Global stub instances
 static CSteamGameSearchStub s_GameSearchStub;
+
+// Forward declare ISteamMusicRemote with minimal stub interface
+// (not in bundled SDK, added in newer Steam SDK versions)
+class ISteamMusicRemote
+{
+public:
+	virtual ~ISteamMusicRemote() {}
+	virtual bool RegisterSteamMusicRemote(const char*) = 0;
+	virtual bool DeregisterSteamMusicRemote() = 0;
+	virtual bool BIsCurrentMusicRemote() = 0;
+	virtual bool BActivationSuccess(bool) = 0;
+	virtual bool SetDisplayName(const char*) = 0;
+	virtual bool SetPNGIcon_64x64(void*, uint32) = 0;
+	virtual bool EnablePlayPrevious(bool) = 0;
+	virtual bool EnablePlayNext(bool) = 0;
+	virtual bool EnableShuffled(bool) = 0;
+	virtual bool EnableLooped(bool) = 0;
+	virtual bool EnableQueue(bool) = 0;
+	virtual bool EnablePlaylists(bool) = 0;
+	virtual bool UpdatePlaybackStatus(int) = 0;
+	virtual bool UpdateShuffled(bool) = 0;
+	virtual bool UpdateLooped(bool) = 0;
+	virtual bool UpdateVolume(float) = 0;
+	virtual bool CurrentEntryWillChange() = 0;
+	virtual bool CurrentEntryIsAvailable(bool) = 0;
+	virtual bool UpdateCurrentEntryText(const char*) = 0;
+	virtual bool UpdateCurrentEntryElapsedSeconds(int) = 0;
+	virtual bool UpdateCurrentEntryCoverArt(void*, uint32) = 0;
+	virtual bool CurrentEntryDidChange() = 0;
+	virtual bool QueueWillChange() = 0;
+	virtual bool ResetQueueEntries() = 0;
+	virtual bool SetQueueEntry(int, int, const char*) = 0;
+	virtual bool SetCurrentQueueEntry(int) = 0;
+	virtual bool QueueDidChange() = 0;
+	virtual bool PlaylistWillChange() = 0;
+	virtual bool ResetPlaylistEntries() = 0;
+	virtual bool SetPlaylistEntry(int, int, const char*) = 0;
+	virtual bool SetCurrentPlaylistEntry(int) = 0;
+	virtual bool PlaylistDidChange() = 0;
+};
+
+class CSteamMusicRemoteStub : public ISteamMusicRemote
+{
+public:
+	virtual bool RegisterSteamMusicRemote(const char*) override { return false; }
+	virtual bool DeregisterSteamMusicRemote() override { return false; }
+	virtual bool BIsCurrentMusicRemote() override { return false; }
+	virtual bool BActivationSuccess(bool) override { return false; }
+	virtual bool SetDisplayName(const char*) override { return false; }
+	virtual bool SetPNGIcon_64x64(void*, uint32) override { return false; }
+	virtual bool EnablePlayPrevious(bool) override { return false; }
+	virtual bool EnablePlayNext(bool) override { return false; }
+	virtual bool EnableShuffled(bool) override { return false; }
+	virtual bool EnableLooped(bool) override { return false; }
+	virtual bool EnableQueue(bool) override { return false; }
+	virtual bool EnablePlaylists(bool) override { return false; }
+	virtual bool UpdatePlaybackStatus(int) override { return false; }
+	virtual bool UpdateShuffled(bool) override { return false; }
+	virtual bool UpdateLooped(bool) override { return false; }
+	virtual bool UpdateVolume(float) override { return false; }
+	virtual bool CurrentEntryWillChange() override { return false; }
+	virtual bool CurrentEntryIsAvailable(bool) override { return false; }
+	virtual bool UpdateCurrentEntryText(const char*) override { return false; }
+	virtual bool UpdateCurrentEntryElapsedSeconds(int) override { return false; }
+	virtual bool UpdateCurrentEntryCoverArt(void*, uint32) override { return false; }
+	virtual bool CurrentEntryDidChange() override { return false; }
+	virtual bool QueueWillChange() override { return false; }
+	virtual bool ResetQueueEntries() override { return false; }
+	virtual bool SetQueueEntry(int, int, const char*) override { return false; }
+	virtual bool SetCurrentQueueEntry(int) override { return false; }
+	virtual bool QueueDidChange() override { return false; }
+	virtual bool PlaylistWillChange() override { return false; }
+	virtual bool ResetPlaylistEntries() override { return false; }
+	virtual bool SetPlaylistEntry(int, int, const char*) override { return false; }
+	virtual bool SetCurrentPlaylistEntry(int) override { return false; }
+	virtual bool PlaylistDidChange() override { return false; }
+};
+
+static CSteamMusicRemoteStub s_MusicRemoteStub;
 
 class CSteamAPIContext
 {

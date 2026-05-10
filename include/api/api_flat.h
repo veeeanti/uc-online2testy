@@ -540,6 +540,10 @@ S_API ISteamMusic* S_CALLTYPE SteamAPI_ISteamClient_GetISteamMusic(intptr_t inst
 		__debugbreak();
 	return g_ClientCtx.SteamClient()->GetISteamMusic(hSteamuser, hSteamPipe, pchVersion);
 }
+S_API ISteamMusicRemote* S_CALLTYPE SteamAPI_ISteamClient_GetISteamMusicRemote(intptr_t instancePtr, HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+{
+	return (ISteamMusicRemote*)SteamMusicRemote();
+}
 S_API ISteamHTMLSurface* S_CALLTYPE SteamAPI_ISteamClient_GetISteamHTMLSurface(intptr_t instancePtr, HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char * pchVersion)
 {
 	if (g_bServerReady == true)
