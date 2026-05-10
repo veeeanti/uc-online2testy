@@ -317,7 +317,6 @@ extern HSteamPipe g_ServerPipe;
 extern HSteamUser g_ServerUser;
 extern ISteamClient* g_ServerClient;
 extern ISteamClient* g_pServerClient;
-extern ISteamClient* g_pSteamClientGameServer;
 extern ISteamClient* g_pSteamClientGameServer_Latest;
 extern ISteamGameServer* g_pGameServer;
 extern ISteamUtils* g_pServerUtils;

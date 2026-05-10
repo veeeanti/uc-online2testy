@@ -12,6 +12,9 @@
 #include "include/sdk/steamclientpublic.h"
 #include "include/sdk/steam_gameserver.h"
 
+// Forward-declare as exported before globals.h (which has extern without S_API)
+S_API ISteamClient* g_pSteamClientGameServer = nullptr;
+
 #include "include/registfuncs.h"
 #include "include/callback_dispatcher.h"
 #include "include/globals.h"
@@ -55,7 +58,6 @@ HSteamPipe g_ServerPipe = 0;
 HSteamUser g_ServerUser = 0;
 ISteamClient* g_ServerClient = nullptr;
 ISteamClient* g_pServerClient = nullptr;
-ISteamClient* g_pSteamClientGameServer = nullptr;
 ISteamClient* g_pSteamClientGameServer_Latest = nullptr;
 ISteamGameServer* g_pGameServer = nullptr;
 ISteamUtils* g_pServerUtils = nullptr;
@@ -500,24 +502,58 @@ static void LoadGameOverlay()
     {
         forcedAppId = g_ForcedAppId;
     }
-    
+
+    // Check if overlay is already loaded by module name (not hardcoded path)
     #if defined(_M_IX86)
-        HMODULE hOverlay = GetModuleHandleW(L"C:\\Program Files (x86)\\Steam\\GameOverlayRenderer.dll");
+        const char* overlayName = "GameOverlayRenderer.dll";
     #elif defined(_M_AMD64)
-        HMODULE hOverlay = GetModuleHandleW(L"C:\\Program Files (x86)\\Steam\\GameOverlayRenderer64.dll");
+        const char* overlayName = "GameOverlayRenderer64.dll";
     #endif
+    HMODULE hOverlay = GetModuleHandleA(overlayName);
 
     if (forcedAppId != 769 && !hOverlay)
     {
-        const char* installPath = SteamAPI_GetSteamInstallPath();
-        if (_stricmp(installPath, "UCOnline2_InvalidPath") != 0)
+        // Use the same path resolution logic as InitSteamClient
+        char steamPath[MAX_PATH] = {0};
+        bool found = false;
+
+        if (GetSteamPathFromRegistry(steamPath, MAX_PATH))
+        {
+            found = true;
+        }
+        else
+        {
+            const char* commonPaths[] = {
+                "C:\\Program Files (x86)\\Steam",
+                "C:\\Steam"
+            };
+            for (int i = 0; i < _countof(commonPaths); i++)
+            {
+                DWORD attrs = GetFileAttributesA(commonPaths[i]);
+                if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
+                {
+                    strcpy_s(steamPath, MAX_PATH, commonPaths[i]);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                const char* cachedPath = SteamAPI_GetSteamInstallPath();
+                if (cachedPath && strcmp(cachedPath, "UCOnline2_InvalidPath") != 0)
+                {
+                    strcpy_s(steamPath, MAX_PATH, cachedPath);
+                    found = true;
+                }
+            }
+        }
+
+        if (found)
         {
             char overlayPath[MAX_PATH] = { 0 };
-            #if defined(_M_IX86)
-                _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer.dll", installPath);
-            #elif defined(_M_AMD64)
-                _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer64.dll", installPath);
-            #endif
+            _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\%s", steamPath, overlayName);
+
+            UCOLOG("[UCOnline2] Loading game overlay from: %s", overlayPath);
             HMODULE hLoaded = LoadLibraryExA(overlayPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
             if (hLoaded)
             {
@@ -525,9 +561,27 @@ static void LoadGameOverlay()
             }
             else
             {
-                UCOLOG("[UCOnline2] Failed to load game overlay: %s (error %lu)", overlayPath, GetLastError());
+                UCOLOG("[UCOnline2] Failed to load game overlay from Steam dir (error %lu), trying PATH...", GetLastError());
+                // Fallback: let Windows search PATH
+                hLoaded = LoadLibraryExA(overlayName, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+                if (hLoaded)
+                {
+                    UCOLOG("[UCOnline2] Loaded game overlay from PATH");
+                }
+                else
+                {
+                    UCOLOG("[UCOnline2] Failed to load game overlay: %s (error %lu)", overlayName, GetLastError());
+                }
             }
         }
+        else
+        {
+            UCOLOG("[UCOnline2] Could not determine Steam path, skipping overlay load");
+        }
+    }
+    else if (hOverlay)
+    {
+        UCOLOG("[UCOnline2] Game overlay already loaded, skipping");
     }
 #endif
 }
