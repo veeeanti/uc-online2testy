@@ -2206,66 +2206,7 @@ S_API int32 S_CALLTYPE SteamAPI_ISteamRemoteStorage_FileRead(intptr_t instancePt
 {
 	if (g_bClientReady == false)
 		__debugbreak();
-	int32 result = g_ClientCtx.SteamRemoteStorage()->FileRead(pchFile, pvData, cubDataToRead);
-
-	// Fallback: if Steam returns nothing, try local file in %APPDATA%/<game>/steam/<SteamID>/
-	if (result <= 0 && pchFile && pchFile[0])
-	{
-		static char s_localBase[MAX_PATH] = {0};
-		if (s_localBase[0] == '\0')
-		{
-			uint64 steamID = 0;
-			ISteamUser* pUser = g_ClientCtx.SteamUser();
-			if (pUser) steamID = pUser->GetSteamID().ConvertToUint64();
-			if (steamID != 0)
-			{
-				char sid[32] = {0};
-				_snprintf_s(sid, sizeof(sid), _TRUNCATE, "%llu", steamID);
-				const char* appData = getenv("APPDATA");
-				if (appData && appData[0])
-				{
-					WIN32_FIND_DATAA ffd = {0};
-					char sp[MAX_PATH] = {0};
-					_snprintf_s(sp, sizeof(sp), _TRUNCATE, "%s\\*", appData);
-					HANDLE hFind = FindFirstFileA(sp, &ffd);
-					if (hFind != INVALID_HANDLE_VALUE)
-					{
-						do {
-							if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
-							if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) continue;
-							char cp[MAX_PATH] = {0};
-							_snprintf_s(cp, sizeof(cp), _TRUNCATE, "%s\\%s\\steam\\%s", appData, ffd.cFileName, sid);
-							if (GetFileAttributesA(cp) != INVALID_FILE_ATTRIBUTES)
-							{ strcpy_s(s_localBase, sizeof(s_localBase), cp); break; }
-						} while (FindNextFileA(hFind, &ffd));
-						FindClose(hFind);
-					}
-				}
-			}
-		}
-		if (s_localBase[0] != '\0')
-		{
-			char norm[MAX_PATH] = {0};
-			strcpy_s(norm, sizeof(norm), pchFile);
-			for (char* p = norm; *p; p++) if (*p == '/') *p = '\\';
-			if (norm[0] == '\\') memmove(norm, norm + 1, strlen(norm));
-			char fp[MAX_PATH * 2] = {0};
-			_snprintf_s(fp, sizeof(fp), _TRUNCATE, "%s\\%s", s_localBase, norm);
-			FILE* f = nullptr;
-			fopen_s(&f, fp, "rb");
-			if (f)
-			{
-				fseek(f, 0, SEEK_END);
-				int32 fs = (int32)ftell(f);
-				fseek(f, 0, SEEK_SET);
-				int32 rs = (cubDataToRead < fs) ? cubDataToRead : fs;
-				size_t br = fread(pvData, 1, rs, f);
-				fclose(f);
-				if (br > 0) return (int32)br;
-			}
-		}
-	}
-	return result;
+	return g_ClientCtx.SteamRemoteStorage()->FileRead(pchFile, pvData, cubDataToRead);
 }
 S_API SteamAPICall_t S_CALLTYPE SteamAPI_ISteamRemoteStorage_FileWriteAsync(intptr_t instancePtr, const char * pchFile, const void * pvData, uint32 cubData)
 {
