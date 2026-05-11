@@ -94,11 +94,22 @@ Okay, so this part I did not cover as of publishing the source files, this will 
 
 - No, this will not work with Denuvo protected games. If you think it can, modify it so that it can work like an activated game, but even then I cannot guarantee it will work. It will likely reject you and you will need to get re-activated as your token will be fucked permanently. So basically, __I say just don't even bother. It'll likely waste your time and the activators' time too.__
 - As it is right now, DLC you don't own will likely not work - I'll try and add functionality for that in and if it works, then it'll likely work the same as Goldberg does.
-- If you're trying this with a game that has the AppId hard coded in (like with Godot games) then you'll need to modify the game to set the AppId to what you need it to be. Though, you won't even need this at all if you do that lol. 
+- ~~If you're trying this with a game that has the AppId hard coded in (like with Godot games) then you'll need to modify the game to set the AppId to what you need it to be. Though, you won't even need this at all if you do that lol.~~
+  **已于 v1.6.0 修复：** 本 fork 通过 `BIsSubscribedApp` hook + 补全 flat API 导出，解决了 Steamworks.NET (C#) 游戏（如 Godot + Steamworks.NET）的兼容性问题。已测试 Slay the Spire 2 正常运行，其他同类游戏应有同样效果。
 - You cannot join VAC protected servers or servers hosted using the real AppId in Garry's Mod or other Source games or any other games that have similar protections. (GoldSrc games seemingly do not apply, as CS1.6 let me join any servers.) Please do not message me asking why you can't join any servers in Garry's Mod. Instead, ask me how you can play with your friends if they have legitimate copies. :)
 - For any other unexpected or unaccounted for issues, please contact me. I have yet to test this with every game so I will rely on the community to do so. 
 
 ## Changelog (xinerqu fork vs upstream v1.5.0)
+
+### v1.6.0 — Steamworks.NET 兼容性修复 (Godot 游戏支持)
+
+**修复了 Godot + Steamworks.NET 游戏（如 Slay the Spire 2）无法运行的问题**
+
+- **根因**：uc-online2 缺少 `SteamAPI_ISteamUserStats_RequestCurrentStats` flat API 导出
+- Steamworks.NET (C#) 在初始化后立即 P/Invoke 此函数加载成就/统计数据，缺失导致 `EntryPointNotFoundException`
+- BIsSubscribedApp hook 已经能处理硬编码 AppID 检查，但 flat API 导出不完整导致 C# 层直接抛异常
+- **修复**：补全缺失的 flat API 导出。`RequestCurrentStats` 在新版 Steam SDK 中已被移除（stats 由 Steam 客户端自动管理），实现返回 `k_uAPICallInvalid`
+- **影响范围**：所有使用 Steamworks.NET 的 Godot / Unity / C# 游戏
 
 ### v1.5.1 — Bug fixes & missing API exports
 
