@@ -2197,31 +2197,89 @@ S_API bool S_CALLTYPE SteamAPI_ISteamParties_GetBeaconLocationData(intptr_t inst
 	return g_ClientCtx.SteamParties()->GetBeaconLocationData(BeaconLocation, eData, pchDataStringOut, cchDataStringOut);
 }
 // Fix Steam Remote Storage file timestamp (Steam writes with epoch 0 for unofficial sessions)
+// Searches %APPDATA% for steam/<SteamID> subdirectories, caches the first match
 static void FixRemoteStorageFileTime(const char* pchFile)
 {
-	if (!pchFile || !pchFile[0] || g_InstallPath[0] == '\0') return;
+	if (!pchFile || !pchFile[0]) return;
 
 	uint64 steamID = 0;
 	ISteamUser* pUser = g_ClientCtx.SteamUser();
 	if (pUser) steamID = pUser->GetSteamID().ConvertToUint64();
 	if (steamID == 0) return;
 
-	char filePath[MAX_PATH * 2] = {0};
-	_snprintf_s(filePath, sizeof(filePath), _TRUNCATE,
-		"%s\\userdata\\%llu\\%u\\remote\\%s",
-		g_InstallPath, steamID, g_ForcedAppId, pchFile);
-	for (char* p = filePath; *p; p++) if (*p == '/') *p = '\\';
-
-	HANDLE hFile = CreateFileA(filePath, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
-		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile != INVALID_HANDLE_VALUE)
+	// Cache the discovered AppData base path (scan once, reuse)
+	static char s_cachedBase[MAX_PATH] = {0};
+	if (s_cachedBase[0] == '\0')
 	{
-		SYSTEMTIME st;
-		GetSystemTime(&st);
-		FILETIME ft;
-		SystemTimeToFileTime(&st, &ft);
-		SetFileTime(hFile, NULL, NULL, &ft);
-		CloseHandle(hFile);
+		char steamIDstr[32] = {0};
+		_snprintf_s(steamIDstr, sizeof(steamIDstr), _TRUNCATE, "%llu", steamID);
+
+		// Only scan %APPDATA% for steam/<SteamID> subdirectories
+		const char* appData = getenv("APPDATA");
+		if (appData && appData[0])
+		{
+			WIN32_FIND_DATAA ffd = {0};
+			char searchPath[MAX_PATH] = {0};
+			_snprintf_s(searchPath, sizeof(searchPath), _TRUNCATE, "%s\\*", appData);
+
+			HANDLE hFind = FindFirstFileA(searchPath, &ffd);
+			if (hFind != INVALID_HANDLE_VALUE)
+			{
+				do {
+					if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+					if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) continue;
+
+					char checkPath[MAX_PATH] = {0};
+					_snprintf_s(checkPath, sizeof(checkPath), _TRUNCATE,
+						"%s\\%s\\steam\\%s", appData, ffd.cFileName, steamIDstr);
+
+					DWORD attrs = GetFileAttributesA(checkPath);
+					if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
+					{
+						strcpy_s(s_cachedBase, sizeof(s_cachedBase), checkPath);
+						break;
+					}
+				} while (FindNextFileA(hFind, &ffd));
+				FindClose(hFind);
+			}
+		}
+	}
+
+	if (s_cachedBase[0] == '\0') return;
+
+	// Normalize the file path
+	char normalizedFile[MAX_PATH] = {0};
+	strcpy_s(normalizedFile, sizeof(normalizedFile), pchFile);
+	for (char* p = normalizedFile; *p; p++) if (*p == '/') *p = '\\';
+	if (normalizedFile[0] == '\\')
+		memmove(normalizedFile, normalizedFile + 1, strlen(normalizedFile));
+
+	// Construct full path and fix timestamp if file exists
+	char filePath[MAX_PATH * 2] = {0};
+	_snprintf_s(filePath, sizeof(filePath), _TRUNCATE, "%s\\%s", s_cachedBase, normalizedFile);
+
+	// Only fix if the file has an invalid timestamp (before year 2000 = epoch < 946684800)
+	HANDLE hFindFile = CreateFileA(filePath, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFindFile != INVALID_HANDLE_VALUE)
+	{
+		FILETIME ftWrite = {0};
+		if (GetFileTime(hFindFile, NULL, NULL, &ftWrite))
+		{
+			ULARGE_INTEGER uli;
+			uli.LowPart = ftWrite.dwLowDateTime;
+			uli.HighPart = ftWrite.dwHighDateTime;
+			// 946684800 seconds = Jan 1 2000 in FILETIME
+			if (uli.QuadPart < 100000000000000000ULL)
+			{
+				SYSTEMTIME st;
+				GetSystemTime(&st);
+				FILETIME ftNew;
+				SystemTimeToFileTime(&st, &ftNew);
+				SetFileTime(hFindFile, NULL, NULL, &ftNew);
+			}
+		}
+		CloseHandle(hFindFile);
 	}
 }
 
