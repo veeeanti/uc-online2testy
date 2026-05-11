@@ -2196,11 +2196,42 @@ S_API bool S_CALLTYPE SteamAPI_ISteamParties_GetBeaconLocationData(intptr_t inst
 		__debugbreak();
 	return g_ClientCtx.SteamParties()->GetBeaconLocationData(BeaconLocation, eData, pchDataStringOut, cchDataStringOut);
 }
+// Fix Steam Remote Storage file timestamp (Steam writes with epoch 0 for unofficial sessions)
+static void FixRemoteStorageFileTime(const char* pchFile)
+{
+	if (!pchFile || !pchFile[0] || g_InstallPath[0] == '\0') return;
+
+	uint64 steamID = 0;
+	ISteamUser* pUser = g_ClientCtx.SteamUser();
+	if (pUser) steamID = pUser->GetSteamID().ConvertToUint64();
+	if (steamID == 0) return;
+
+	char filePath[MAX_PATH * 2] = {0};
+	_snprintf_s(filePath, sizeof(filePath), _TRUNCATE,
+		"%s\\userdata\\%llu\\%u\\remote\\%s",
+		g_InstallPath, steamID, g_ForcedAppId, pchFile);
+	for (char* p = filePath; *p; p++) if (*p == '/') *p = '\\';
+
+	HANDLE hFile = CreateFileA(filePath, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		SYSTEMTIME st;
+		GetSystemTime(&st);
+		FILETIME ft;
+		SystemTimeToFileTime(&st, &ft);
+		SetFileTime(hFile, NULL, NULL, &ft);
+		CloseHandle(hFile);
+	}
+}
+
 S_API bool S_CALLTYPE SteamAPI_ISteamRemoteStorage_FileWrite(intptr_t instancePtr, const char * pchFile, const void * pvData, int32 cubData)
 {
 	if (g_bClientReady == false)
 		__debugbreak();
-	return g_ClientCtx.SteamRemoteStorage()->FileWrite(pchFile, pvData, cubData);
+	bool result = g_ClientCtx.SteamRemoteStorage()->FileWrite(pchFile, pvData, cubData);
+	if (result) FixRemoteStorageFileTime(pchFile);
+	return result;
 }
 S_API int32 S_CALLTYPE SteamAPI_ISteamRemoteStorage_FileRead(intptr_t instancePtr, const char * pchFile, void * pvData, int32 cubDataToRead)
 {
@@ -2212,7 +2243,9 @@ S_API SteamAPICall_t S_CALLTYPE SteamAPI_ISteamRemoteStorage_FileWriteAsync(intp
 {
 	if (g_bClientReady == false)
 		__debugbreak();
-	return g_ClientCtx.SteamRemoteStorage()->FileWriteAsync(pchFile, pvData, cubData);
+	SteamAPICall_t result = g_ClientCtx.SteamRemoteStorage()->FileWriteAsync(pchFile, pvData, cubData);
+	if (result) FixRemoteStorageFileTime(pchFile);
+	return result;
 }
 S_API SteamAPICall_t S_CALLTYPE SteamAPI_ISteamRemoteStorage_FileReadAsync(intptr_t instancePtr, const char * pchFile, uint32 nOffset, uint32 cubToRead)
 {
