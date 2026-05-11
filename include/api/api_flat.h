@@ -2363,9 +2363,9 @@ S_API bool S_CALLTYPE SteamAPI_ISteamRemoteStorage_IsCloudEnabledForAccount(intp
 }
 S_API bool S_CALLTYPE SteamAPI_ISteamRemoteStorage_IsCloudEnabledForApp(intptr_t instancePtr)
 {
-	if (g_bClientReady == false)
-		__debugbreak();
-	return g_ClientCtx.SteamRemoteStorage()->IsCloudEnabledForApp();
+	// Always return true to ensure games use Steam API for writes instead of falling back
+	// to direct filesystem I/O (which can produce invalid timestamps like epoch 0)
+	return true;
 }
 S_API void S_CALLTYPE SteamAPI_ISteamRemoteStorage_SetCloudEnabledForApp(intptr_t instancePtr, bool bEnabled)
 {
