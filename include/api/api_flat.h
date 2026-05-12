@@ -599,6 +599,12 @@ S_API ISteamInput* S_CALLTYPE SteamAPI_ISteamClient_GetISteamInput(intptr_t inst
 		__debugbreak();
 	return g_ClientCtx.SteamClient()->GetISteamInput(hSteamUser, hSteamPipe, pchVersion);
 }
+S_API ISteamAppList* S_CALLTYPE SteamAPI_ISteamClient_GetISteamAppList(intptr_t instancePtr, HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char * pchVersion)
+{
+	if (g_bClientReady == false)
+		__debugbreak();
+	return g_ClientCtx.SteamClient()->GetISteamAppList(hSteamUser, hSteamPipe, pchVersion);
+}
 S_API ISteamParties* S_CALLTYPE SteamAPI_ISteamClient_GetISteamParties(intptr_t instancePtr, HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char * pchVersion)
 {
 	if (g_bServerReady == true)
@@ -8659,3 +8665,69 @@ S_API ISteamClient* S_CALLTYPE SteamAPI_SteamClient_v019()
 	UCOLOG("[UCOnline2] SteamAPI_SteamClient_v019\r\n");
 	return g_bClientReady ? g_ClientCtx.SteamClient() : nullptr;
 }
+
+// ============================================================
+// ISteamAppList flat API exports
+// ============================================================
+S_API uint32 S_CALLTYPE SteamAPI_ISteamAppList_GetNumInstalledApps(intptr_t instancePtr)
+{
+	if (g_bClientReady == false) return 0;
+	ISteamAppList* p = g_ClientCtx.SteamAppList();
+	return p ? p->GetNumInstalledApps() : 0;
+}
+S_API uint32 S_CALLTYPE SteamAPI_ISteamAppList_GetInstalledApps(intptr_t instancePtr, AppId_t *pvecAppID, uint32 unMaxAppIDs)
+{
+	if (g_bClientReady == false) return 0;
+	ISteamAppList* p = g_ClientCtx.SteamAppList();
+	return p ? p->GetInstalledApps(pvecAppID, unMaxAppIDs) : 0;
+}
+S_API int S_CALLTYPE SteamAPI_ISteamAppList_GetAppName(intptr_t instancePtr, AppId_t nAppID, char *pchName, int cchNameMax)
+{
+	if (g_bClientReady == false) return -1;
+	ISteamAppList* p = g_ClientCtx.SteamAppList();
+	return p ? p->GetAppName(nAppID, pchName, cchNameMax) : -1;
+}
+S_API int S_CALLTYPE SteamAPI_ISteamAppList_GetAppInstallDir(intptr_t instancePtr, AppId_t nAppID, char *pchDirectory, int cchNameMax)
+{
+	if (g_bClientReady == false) return -1;
+	ISteamAppList* p = g_ClientCtx.SteamAppList();
+	return p ? p->GetAppInstallDir(nAppID, pchDirectory, cchNameMax) : -1;
+}
+S_API int S_CALLTYPE SteamAPI_ISteamAppList_GetAppBuildId(intptr_t instancePtr, AppId_t nAppID)
+{
+	if (g_bClientReady == false) return -1;
+	ISteamAppList* p = g_ClientCtx.SteamAppList();
+	return p ? p->GetAppBuildId(nAppID) : -1;
+}
+
+// ============================================================
+// Missing interface version string exports
+// ============================================================
+S_API const char* S_CALLTYPE SteamAPI_SteamAppList_v001() { return STEAMAPPLIST_INTERFACE_VERSION; }
+S_API const char* S_CALLTYPE SteamAPI_SteamUser_v021() { return STEAMUSER_INTERFACE_VERSION; }
+S_API const char* S_CALLTYPE SteamAPI_SteamRemotePlay_v001() { return STEAMREMOTEPLAY_INTERFACE_VERSION; }
+S_API const char* S_CALLTYPE SteamAPI_SteamUGC_v016() { return STEAMUGC_INTERFACE_VERSION; }
+S_API const char* S_CALLTYPE SteamAPI_SteamVideo_v002() { return STEAMVIDEO_INTERFACE_VERSION; }
+S_API const char* S_CALLTYPE SteamAPI_SteamGameServer_v014() { return "SteamGameServer014"; }
+S_API const char* S_CALLTYPE SteamAPI_SteamGameServerUGC_v016() { return "SteamUGC016"; }
+
+// ============================================================
+// SteamDatagramHostedAddress stub exports
+// ============================================================
+S_API void S_CALLTYPE SteamAPI_SteamDatagramHostedAddress_Clear(intptr_t self) {}
+S_API uint16 S_CALLTYPE SteamAPI_SteamDatagramHostedAddress_GetPopID(intptr_t self) { return 0; }
+S_API void S_CALLTYPE SteamAPI_SteamDatagramHostedAddress_SetDevAddress(intptr_t self, uint32, uint32, uint32) {}
+
+// ============================================================
+// Stadia identity stub exports (deprecated platform)
+// ============================================================
+S_API bool S_CALLTYPE SteamAPI_SteamNetworkingIdentity_GetStadiaID(intptr_t self) { return false; }
+S_API void S_CALLTYPE SteamAPI_SteamNetworkingIdentity_SetStadiaID(intptr_t self, uint64) {}
+
+// ============================================================
+// ISteamNetworkingFakeUDPPort stub exports
+// ============================================================
+S_API void S_CALLTYPE SteamAPI_ISteamNetworkingFakeUDPPort_DestroyFakeUDPPort(intptr_t instancePtr) {}
+S_API int S_CALLTYPE SteamAPI_ISteamNetworkingFakeUDPPort_ReceiveMessages(intptr_t instancePtr, void**, int) { return 0; }
+S_API void S_CALLTYPE SteamAPI_ISteamNetworkingFakeUDPPort_ScheduleCleanup(intptr_t instancePtr) {}
+S_API void S_CALLTYPE SteamAPI_ISteamNetworkingFakeUDPPort_SendMessageToFakeIP(intptr_t instancePtr, void*, uint32, uint16) {}

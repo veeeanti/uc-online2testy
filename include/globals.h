@@ -15,6 +15,7 @@
 #include "include/sdk/steam_api.h"
 #include "include/sdk/steamclientpublic.h"
 #include "include/sdk/steam_gameserver.h"
+#include "include/sdk/isteamapplist.h"
 
 const uint32 k_unServerFlagNone    = 0x00;
 const uint32 k_unServerFlagSecure  = 0x01;
@@ -173,6 +174,7 @@ public:
 	ISteamVideo* m_pSteamVideo;
 	ISteamParentalSettings* m_pSteamParentalSettings;
 	ISteamInput* m_pSteamInput;
+	ISteamAppList* m_pSteamAppList;
 
 	bool Init()
 	{
@@ -204,6 +206,7 @@ public:
 		m_pSteamVideo = (ISteamVideo*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMVIDEO_INTERFACE_VERSION);
 		m_pSteamParentalSettings = (ISteamParentalSettings*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMPARENTALSETTINGS_INTERFACE_VERSION);
 		m_pSteamInput = (ISteamInput*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMINPUT_INTERFACE_VERSION);
+		m_pSteamAppList = (ISteamAppList*)SteamInternal_FindOrCreateUserInterface(hUser, STEAMAPPLIST_INTERFACE_VERSION);
 
 		return m_pSteamUser != nullptr && m_pSteamUtils != nullptr;
 	}
@@ -219,7 +222,7 @@ public:
 		m_pSteamRemotePlay = nullptr; m_pSteamTimeline = nullptr;
 		m_pSteamInventory = nullptr; m_pSteamHTMLSurface = nullptr;
 		m_pSteamVideo = nullptr; m_pSteamParentalSettings = nullptr;
-		m_pSteamInput = nullptr;
+		m_pSteamInput = nullptr; m_pSteamAppList = nullptr;
 	}
 
 	ISteamClient* SteamClient() { return m_pSteamClient; }
@@ -246,6 +249,7 @@ public:
 	ISteamParentalSettings* SteamParentalSettings() { return m_pSteamParentalSettings; }
 	ISteamInput* SteamInput() { return m_pSteamInput; }
 	ISteamTimeline* SteamTimeline() { return m_pSteamTimeline; }
+	ISteamAppList* SteamAppList() { return m_pSteamAppList; }
 };
 
 class CSteamGameServerAPIContext
