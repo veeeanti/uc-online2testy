@@ -12,11 +12,15 @@
 #include "include/sdk/steamclientpublic.h"
 #include "include/sdk/steam_gameserver.h"
 
+// Forward-declare as exported before globals.h (which has extern without S_API)
+S_API ISteamClient* g_pSteamClientGameServer = nullptr;
+
 #include "include/registfuncs.h"
 #include "include/callback_dispatcher.h"
 #include "include/globals.h"
 #include "include/uc_loader.h"
 #include "include/dump_handler.h"
+#include "include/MinHook.h"
 
 // Compiler does NOT like it that these are at the end, way after where it wants to see them. So we are making it aware of the existence of these functions. This is just to shut it the fuck up and compile lol.
 void SetAppIDEnv();
@@ -54,7 +58,6 @@ HSteamPipe g_ServerPipe = 0;
 HSteamUser g_ServerUser = 0;
 ISteamClient* g_ServerClient = nullptr;
 ISteamClient* g_pServerClient = nullptr;
-ISteamClient* g_pSteamClientGameServer = nullptr;
 ISteamClient* g_pSteamClientGameServer_Latest = nullptr;
 ISteamGameServer* g_pGameServer = nullptr;
 ISteamUtils* g_pServerUtils = nullptr;
@@ -269,7 +272,6 @@ S_API void* S_CALLTYPE SteamInternal_ContextInit(void* pData)
 
 void UCOLOG(const char* fmt, ...)
 {
-#ifdef _DEBUG
     if (!fmt) return;
     va_list args;
     va_start(args, fmt);
@@ -298,16 +300,13 @@ void UCOLOG(const char* fmt, ...)
     
     fclose(f);
     va_end(args);
-#endif
 }
 
 void UCOColor(WORD color, const char* text)
 {
     (void)color;
-#ifdef _DEBUG
     if (text && text[0])
         UCOLOG("%s", text);
-#endif
 }
 
 void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
@@ -367,18 +366,18 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
     UCOLOG("[UCOnline2] Using Steam path: %s", steamPath);
     #if defined(_M_IX86)
         UCOLOG("[UCOnline2] Target architecture: x86");
-    const char* steamClientPath = "C:\\Program Files (x86)\\Steam\\steamclient.dll";
+    const char* steamClientName = "steamclient.dll";
     #else
         UCOLOG("[UCOnline2] Target architecture: x64");
-    const char* steamClientPath = "C:\\Program Files (x86)\\Steam\\steamclient64.dll";
+    const char* steamClientName = "steamclient64.dll";
     #endif
-    
+
     // Build full path to steamclient.dll
     char fullPath[MAX_PATH] = {0};
-    _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", steamPath, steamClientPath);
-    
+    _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", steamPath, steamClientName);
+
     // First, check if the DLL is already loaded in this process (Steam bootstrapper handles this)
-    HMODULE hMod = GetModuleHandleA(steamClientPath);
+    HMODULE hMod = GetModuleHandleA(steamClientName);
     if (hMod)
     {
         UCOLOG("[UCOnline2] steamclient.dll already loaded in process, using existing handle");
@@ -386,14 +385,14 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
     else
     {
         UCOLOG("[UCOnline2] Loading Steam client from: %s", fullPath);
-        hMod = LoadLibraryA(fullPath);
+        hMod = LoadLibraryExA(fullPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (!hMod)
         {
             UCOLOG("[UCOnline2] Failed to load steamclient.dll from %s (error %lu)", fullPath, GetLastError());
-            
+
             // Try fallback to just the filename (let Windows search PATH)
             UCOLOG("[UCOnline2] Trying to load steamclient.dll from system PATH");
-            hMod = LoadLibraryA(steamClientPath);
+            hMod = LoadLibraryExA(steamClientName, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
             if (!hMod)
             {
                 UCOLOG("[UCOnline2] Failed to load steamclient.dll from PATH (error %lu)", GetLastError());
@@ -445,6 +444,53 @@ void* InitSteamClient(HMODULE* phMod, bool bLocal, const char* iface)
 }
 
 // ============================================================
+// BIsSubscribedApp Hook - always return true
+// Fixes games with hardcoded AppID subscription checks
+// ============================================================
+
+typedef bool (S_CALLTYPE *Fn_BIsSubscribedApp)(void*, AppId_t);
+static Fn_BIsSubscribedApp g_pfnOriginalBIsSubscribedApp = nullptr;
+
+static bool S_CALLTYPE Hooked_BIsSubscribedApp(void* pSteamApps, AppId_t appId)
+{
+    UCOLOG("[UCOnline2] BIsSubscribedApp(%u) -> hooked, returning true", appId);
+    return true;
+}
+
+void InstallBIsSubscribedAppHook()
+{
+    if (!g_bClientReady || !g_ClientCtx.SteamApps())
+    {
+        UCOLOG("[UCOnline2] Cannot install BIsSubscribedApp hook: client not ready or SteamApps is null");
+        return;
+    }
+
+    void** vtable = *reinterpret_cast<void***>(g_ClientCtx.SteamApps());
+
+    // ISteamApps vtable layout (from isteamapps.h):
+    // 0: BIsSubscribed, 1: BIsLowViolence, 2: BIsCybercafe, 3: BIsVACBanned,
+    // 4: GetCurrentGameLanguage, 5: GetAvailableGameLanguages, 6: BIsSubscribedApp
+    void* pOriginalFunc = vtable[6];
+
+    MH_STATUS mhStatus = MH_Initialize();
+    UCOLOG("[UCOnline2] MH_Initialize status: %d", mhStatus);
+
+    mhStatus = MH_CreateHook(pOriginalFunc, &Hooked_BIsSubscribedApp, reinterpret_cast<void**>(&g_pfnOriginalBIsSubscribedApp));
+    if (mhStatus == MH_OK)
+    {
+        mhStatus = MH_EnableHook(pOriginalFunc);
+        if (mhStatus == MH_OK)
+            UCOLOG("[UCOnline2] BIsSubscribedApp hook installed successfully");
+        else
+            UCOLOG("[UCOnline2] MH_EnableHook failed for BIsSubscribedApp: %d", mhStatus);
+    }
+    else
+    {
+        UCOLOG("[UCOnline2] MH_CreateHook failed for BIsSubscribedApp: %d", mhStatus);
+    }
+}
+
+// ============================================================
 // LoadGameOverlay
 // ============================================================
 
@@ -456,24 +502,58 @@ static void LoadGameOverlay()
     {
         forcedAppId = g_ForcedAppId;
     }
-    
+
+    // Check if overlay is already loaded by module name (not hardcoded path)
     #if defined(_M_IX86)
-        HMODULE hOverlay = GetModuleHandleW(L"C:\\Program Files (x86)\\Steam\\GameOverlayRenderer.dll");
+        const char* overlayName = "GameOverlayRenderer.dll";
     #elif defined(_M_AMD64)
-        HMODULE hOverlay = GetModuleHandleW(L"C:\\Program Files (x86)\\Steam\\GameOverlayRenderer64.dll");
+        const char* overlayName = "GameOverlayRenderer64.dll";
     #endif
+    HMODULE hOverlay = GetModuleHandleA(overlayName);
 
     if (forcedAppId != 769 && !hOverlay)
     {
-        const char* installPath = SteamAPI_GetSteamInstallPath();
-        if (_stricmp(installPath, "UCOnline2_InvalidPath") != 0)
+        // Use the same path resolution logic as InitSteamClient
+        char steamPath[MAX_PATH] = {0};
+        bool found = false;
+
+        if (GetSteamPathFromRegistry(steamPath, MAX_PATH))
+        {
+            found = true;
+        }
+        else
+        {
+            const char* commonPaths[] = {
+                "C:\\Program Files (x86)\\Steam",
+                "C:\\Steam"
+            };
+            for (int i = 0; i < _countof(commonPaths); i++)
+            {
+                DWORD attrs = GetFileAttributesA(commonPaths[i]);
+                if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
+                {
+                    strcpy_s(steamPath, MAX_PATH, commonPaths[i]);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                const char* cachedPath = SteamAPI_GetSteamInstallPath();
+                if (cachedPath && strcmp(cachedPath, "UCOnline2_InvalidPath") != 0)
+                {
+                    strcpy_s(steamPath, MAX_PATH, cachedPath);
+                    found = true;
+                }
+            }
+        }
+
+        if (found)
         {
             char overlayPath[MAX_PATH] = { 0 };
-            #if defined(_M_IX86)
-                _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer.dll", installPath);
-            #elif defined(_M_AMD64)
-                _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\GameOverlayRenderer64.dll", installPath);
-            #endif
+            _snprintf_s(overlayPath, MAX_PATH, _TRUNCATE, "%s\\%s", steamPath, overlayName);
+
+            UCOLOG("[UCOnline2] Loading game overlay from: %s", overlayPath);
             HMODULE hLoaded = LoadLibraryExA(overlayPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
             if (hLoaded)
             {
@@ -481,9 +561,27 @@ static void LoadGameOverlay()
             }
             else
             {
-                UCOLOG("[UCOnline2] Failed to load game overlay: %s (error %lu)", overlayPath, GetLastError());
+                UCOLOG("[UCOnline2] Failed to load game overlay from Steam dir (error %lu), trying PATH...", GetLastError());
+                // Fallback: let Windows search PATH
+                hLoaded = LoadLibraryExA(overlayName, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+                if (hLoaded)
+                {
+                    UCOLOG("[UCOnline2] Loaded game overlay from PATH");
+                }
+                else
+                {
+                    UCOLOG("[UCOnline2] Failed to load game overlay: %s (error %lu)", overlayName, GetLastError());
+                }
             }
         }
+        else
+        {
+            UCOLOG("[UCOnline2] Could not determine Steam path, skipping overlay load");
+        }
+    }
+    else if (hOverlay)
+    {
+        UCOLOG("[UCOnline2] Game overlay already loaded, skipping");
     }
 #endif
 }
