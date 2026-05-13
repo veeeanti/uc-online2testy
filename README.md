@@ -1,18 +1,10 @@
-# uc-online2 — xinerqu 分支
-
-> **⚠️ 此仓库是 [UnionCrax-Team/uc-online2](https://github.com/UnionCrax-Team/uc-online2) 的个人维护分支 (fork)。**
->
-> 原作者 [veeanti](https://vee-anti.xyz) 的工作是上游的基础。本分支在原 v1.5.0 基础上修复了关键 bug 并补全了功能，如果上游未合并 PR，两条线将各自独立发展。
->
-> 英文说明见原文下方，本段为中文摘要。详细变更见 [Changelog](#changelog)。
-
-# uc-online2 (Original README below)
+# uc-online2 
 
 Custom modified Steam API .dll for Steam games to spoof your game as Spacewar (or any other game). Drop-in replacement for `steam_api.dll` / `steam_api64.dll`. Now has its own "client"! (AKA Core)
 
 ## Usage
 
-__**If using downloaded .dlls from [Releases](https://github.com/xinerqu/uc-online2/releases) (xinerqu fork, v1.5.1):**__
+__**If using downloaded .dlls from [Releases](https://github.com/UnionCrax-Team/uc-online2/releases) (as of now, v1.6.2, thanks to xinerqu!):**__
 - 1. Extract the archive downloaded from __**LATEST**__ release (which is now v1.5.0).
 - 2. Copy the corresponding .dll to replace your original .dll.
    - 2a. Rename the original .dll before copying it to something else if you feel you must back it up, something like ``steam_api_o.dll`` as Goldberg Emu suggests or ``steam_api64.dll.old``. (It doesn't matter as long as it is just changed.)
@@ -95,11 +87,17 @@ Okay, so this part I did not cover as of publishing the source files, this will 
 - No, this will not work with Denuvo protected games. If you think it can, modify it so that it can work like an activated game, but even then I cannot guarantee it will work. It will likely reject you and you will need to get re-activated as your token will be fucked permanently. So basically, __I say just don't even bother. It'll likely waste your time and the activators' time too.__
 - As it is right now, DLC you don't own will likely not work - I'll try and add functionality for that in and if it works, then it'll likely work the same as Goldberg does.
 - ~~If you're trying this with a game that has the AppId hard coded in (like with Godot games) then you'll need to modify the game to set the AppId to what you need it to be. Though, you won't even need this at all if you do that lol.~~
+   ... note from xinerqu ...
+   - ZH
   **已于 v1.6.0 修复：** 本 fork 通过 `BIsSubscribedApp` hook + 补全 flat API 导出，解决了 Steamworks.NET (C#) 游戏（如 Godot + Steamworks.NET）的兼容性问题。已测试 Slay the Spire 2 正常运行，其他同类游戏应有同样效果。
+   - EN
+   **Fixed in v1.6.0:** This fork resolves compatibility issues for Steamworks.NET (C#) games—such as those built with Godot + Steamworks.NET—by utilizing the `BIsSubscribedApp` hook and completing the flat API exports. *Slay the Spire 2* has been tested and runs normally; other similar games should yield the same results.
 - You cannot join VAC protected servers or servers hosted using the real AppId in Garry's Mod or other Source games or any other games that have similar protections. (GoldSrc games seemingly do not apply, as CS1.6 let me join any servers.) Please do not message me asking why you can't join any servers in Garry's Mod. Instead, ask me how you can play with your friends if they have legitimate copies. :)
 - For any other unexpected or unaccounted for issues, please contact me. I have yet to test this with every game so I will rely on the community to do so. 
 
-## Changelog (xinerqu fork vs upstream v1.5.0)
+## Changelog, from xinerqu's PR 
+
+ - ZH
 
 ### v1.6.2 — Facepunch.Steamworks / Unity 游戏兼容性修复
 
@@ -152,3 +150,57 @@ Okay, so this part I did not cover as of publishing the source files, this will 
 **其他修复**
 - Release 模式日志：移除 `#ifdef _DEBUG` 守卫，UCOLOG 现在在所有构建模式下工作
 - 更健壮的 DLL 路径解析：`PathFindFileNameA` 确保文件名提取正确
+
+ - EN
+
+ ### v1.6.2 — Facepunch.Steamworks / Unity Game Compatibility Fixes
+
+**Fixed crashes in Unity games using Facepunch.Steamworks (such as BadPunPC) caused by missing flat API exports.**
+
+- **Issue**: Facepunch.Steamworks requires 995 Steam API exports, but uc-online2 was missing 22 of them, including the ISteamAppList interface, several interface version strings, and some networking/Stadia-related exports. Missing these exports caused games to crash immediately during initialization.
+- **Fix**: Added all 22 missing exports:
+  - **ISteamAppList**: `GetISteamAppList` + 5 AppList functions, obtaining the real interface through `SteamInternal_FindOrCreateUserInterface`
+  - **Interface version strings**: `SteamAppList_v001`, `SteamUser_v021`, `SteamRemotePlay_v001`, `SteamUGC_v016`, `SteamVideo_v002`, `SteamGameServer_v014`, `SteamGameServerUGC_v016`
+  - **Networking stubs**: 4 FakeUDPPort functions, 3 SteamDatagramHostedAddress functions
+  - **Stadia stubs**: `GetStadiaID`, `SetStadiaID`
+- **Affected scope**: All Unity / .NET games using Facepunch.Steamworks
+
+### v1.6.1 — Save Persistence Fix
+
+**Fixed an issue where save data in some Steam Remote Storage games would disappear after exiting the game.**
+
+- **Issue**: Games queried save files through `FileExists`, and Steam returned FALSE. The game would then treat the local save as corrupted/dirty data and automatically delete it, even though the file still existed and the data was valid.
+- **Fix**: Added a local fallback in `SteamAPI_ISteamRemoteStorage_FileExists`. When Steam returns FALSE, it scans all subdirectories under `%APPDATA%` for folders matching the `steam/<SteamID>` pattern. If the local file exists, it returns TRUE to prevent accidental deletion. Paths are cached after the initial scan.
+
+### v1.6.0 — Steamworks.NET Compatibility Fixes (Godot Game Support)
+
+**Fixed issues preventing Godot + Steamworks.NET games (such as Slay the Spire 2) from running.**
+
+- **Root cause**: uc-online2 was missing the `SteamAPI_ISteamUserStats_RequestCurrentStats` flat API export.
+- Steamworks.NET (C#) immediately P/Invokes this function after initialization to load achievements/statistics, and its absence caused an `EntryPointNotFoundException`.
+- The BIsSubscribedApp hook already handled hardcoded AppID checks, but incomplete flat API exports caused the C# layer itself to throw an exception.
+- **Fix**: Added the missing flat API export. `RequestCurrentStats` has been removed in newer Steam SDKs (stats are now automatically managed by the Steam client), so the implementation returns `k_uAPICallInvalid`.
+- **Affected scope**: All Godot / Unity / C# games using Steamworks.NET
+
+### v1.5.1 — Bug Fixes & Missing API Exports
+
+**Bug 1: `InitSteamClient()` loading path issue**
+- Original code used `LoadLibraryA(fullPath)` to load `steamclient64.dll`
+- When Windows resolved DLL dependencies (`tier0_s64.dll`, `vstdlib_s64.dll`), it searched the game EXE directory instead of the Steam directory
+- **Fix**: Switched to `LoadLibraryExA` + `LOAD_WITH_ALTERED_SEARCH_PATH`, and unified core DLL loading path fixes in `uc_loader.h`
+
+**Bug 2: `LoadGameOverlay()` hardcoded path**
+- `GetModuleHandle` used the hardcoded path `C:\Program Files (x86)\Steam\GameOverlayRenderer64.dll`
+- If Steam was installed in a non-default location, the overlay could be incorrectly detected as already loaded
+- **Fix**: Replaced with `GetModuleHandleA(moduleName)`, added three-level Steam path fallback logic (registry → hardcoded → API cache), plus PATH search fallback
+
+**Added missing flat API exports**
+- 34 `ISteamMusicRemote` flat API exports
+- 11 legacy `ISteamGameSearch` flat API stubs
+- `ISteamFriends_SetPersonaName` + `ISteamFriends_GetUserRestrictions`
+- Legacy versioned interface aliases (v001 GameSearch/MusicRemote/Timeline, v017 Friends, v012 UserStats, v020 UGC, etc.)
+- `g_pSteamClientGameServer` export (fixed `S_API` declaration placement)
+
+**Other fixes**
+- Release build logging: removed the `#ifdef _DEBUG` guard, so UCOLOG now works in all build configurations
+- More robust DLL path resolution: `PathFindFileNameA` now ensures correct filename extraction
