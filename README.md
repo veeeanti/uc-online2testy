@@ -1,4 +1,5 @@
-# uc-online2 
+# uc-online2 _TESTING REPO_
+## This means that this repo isn't meant to be used!! It is for personal testing, please see the repo from the [UnionCrax.Team](https://github.com/UnionCrax-Team/uc-online2) account / organization as that's meant for public use. 
 
 Custom modified Steam API .dll for Steam games to spoof your game as Spacewar (or any other game). Drop-in replacement for `steam_api.dll` / `steam_api64.dll`. Now has its own "client"! (AKA Core)
 
