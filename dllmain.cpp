@@ -35,6 +35,7 @@ void WriteAppIDFile();
 #include "include/api/api_shutdown.h"
 #include "include/api/api_factory.h"
 #include "include/api/api_flat.h"
+#include "include/api/api_source.h"
 
 // ============================================================
 // Global variable definitions

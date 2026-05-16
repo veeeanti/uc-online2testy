@@ -1,8 +1,52 @@
+#pragma once
+
+#include "api_source.h"
+#include <string.h>
+
+// Source engine platform interfaces - must be handled BEFORE steamclient lookup
+// These are NOT Steam API interfaces but Source engine internal interfaces
+// that games like Half-Life expect to get from steamclient.dll
+static void* TrySourceEngineInterface(const char* ver)
+{
+	if (!ver) return nullptr;
+
+	// Filesystem interface - required for Half-Life save games and config
+	if (strcmp(ver, "FILESYSTEM_INTERFACE_VERSION") == 0 ||
+		strcmp(ver, "FILESYSTEM_INIT") == 0 ||
+		strcmp(ver, "FileSystem_Startup") == 0)
+	{
+		UCOLOG("[UCOnline2] Intercepting FILESYSTEM interface -> %s", ver);
+		return GetSourceFilesystemStub();
+	}
+
+	// Sys interface - required for Half-Life command line handling
+	if (strcmp(ver, "SYS_INTERFACE_VERSION") == 0 ||
+		strcmp(ver, "Sys_InitArgv") == 0)
+	{
+		UCOLOG("[UCOnline2] Intercepting SYS interface -> %s", ver);
+		return GetSourceSysStub();
+	}
+
+	// Tier0 interface - memory allocation etc
+	if (strcmp(ver, "TIER0_INTERFACE_VERSION") == 0)
+	{
+		UCOLOG("[UCOnline2] Intercepting TIER0 interface");
+		return GetSourceTier0Stub();
+	}
+
+	return nullptr;
+}
+
 S_API void* S_CALLTYPE SteamInternal_CreateInterface(const char* ver)
 {
 	if (ver)
 	{
 		UCOLOG("[UCOnline2] SteamInternal_CreateInterface -> %s\r\n", ver);
+
+		// First check if this is a Source engine platform interface
+		void* srcIface = TrySourceEngineInterface(ver);
+		if (srcIface)
+			return srcIface;
 
 		HMODULE hMod = g_ClientModule;
 		if (g_ServerModule) hMod = g_ServerModule;
