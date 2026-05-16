@@ -1,10 +1,12 @@
 /**
  *  Source Engine Platform Interface Stubs
  *  =====================================
- *  Half-Life and Source engine games require filesystem, sys, and tier0
- *  interfaces that are NOT part of Steam API but are loaded via steamclient.dll.
+ *  GoldSrc/Half-Life filesystem and sys interfaces based on the GoldSrc SDK.
+ *  These are NOT Steam API interfaces but are loaded via steamclient.dll.
  *
- *  These stubs prevent "Missing shutdown function" errors.
+ *  Interface versions:
+ *  - VFileSystem009 (GoldSrc default)
+ *  - VSys001 (Sys interface)
  *
  *  ~veeλnti<3 2026
  */
@@ -28,9 +30,26 @@ struct ShutdownEntry {
     ShutdownFunc_t func;
 };
 
-// Filesystem interface stub
-// Half-Life expects this for save games, configs, and content mounting
-class CFilesystemStub
+// File handle types from FileSystem.h
+typedef void* FileHandle_t;
+typedef int FileFindHandle_t;
+
+// FileSystemSeek_t from FileSystem.h
+enum FileSystemSeek_t {
+    FILESYSTEM_SEEK_HEAD = 0,
+    FILESYSTEM_SEEK_CURRENT,
+    FILESYSTEM_SEEK_TAIL
+};
+
+// IBaseInterface from interface.h
+class IBaseInterface {
+public:
+    virtual ~IBaseInterface() {}
+};
+
+// Filesystem interface stub - matches IFileSystem from FileSystem.h
+// GoldSrc uses VFileSystem009
+class CFilesystemStub : public IBaseInterface
 {
 private:
     bool m_bInitialized;
@@ -39,72 +58,115 @@ private:
 public:
     CFilesystemStub() : m_bInitialized(false) {}
     
-    // Core lifecycle - REQUIRED
-    virtual bool Init(const char* basedir, void* filesystemFactory) {
-        m_BaseDir = basedir ? basedir : "";
-        m_bInitialized = true;
-        UCOLOG("[UCOnline2-Source] Filesystem Init: %s", m_BaseDir.c_str());
-        return true;
+    // Core lifecycle - Mount/Unmount from IFileSystem
+    virtual void Mount(void) { 
+        m_bInitialized = true; 
+        UCOLOG("[UCOnline2-Source] Filesystem Mount");
     }
-    
-    virtual void Shutdown() {
-        UCOLOG("[UCOnline2-Source] Filesystem Shutdown");
-        m_bInitialized = false;
+    virtual void Unmount(void) { 
+        UCOLOG("[UCOnline2-Source] Filesystem Unmount");
+        m_bInitialized = false; 
     }
-    
-    // File operations - commonly called
-    virtual bool FileExists(const char* path, const char* pathID = nullptr) {
-        if (!path || !m_bInitialized) return false;
-        
+
+    virtual void RemoveAllSearchPaths(void) {}
+    virtual void AddSearchPath(const char* pPath, const char* pathID) {}
+    virtual bool RemoveSearchPath(const char* pPath) { return false; }
+    virtual void RemoveFile(const char* pRelativePath, const char* pathID) {}
+    virtual void CreateDirHierarchy(const char* path, const char* pathID) {}
+
+    // File I/O and info
+    virtual bool FileExists(const char* pFileName) { 
+        if (!pFileName || !m_bInitialized) return false;
         char fullPath[MAX_PATH];
         if (m_BaseDir.empty()) {
-            strcpy_s(fullPath, MAX_PATH, path);
+            strcpy_s(fullPath, MAX_PATH, pFileName);
         } else {
-            _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", m_BaseDir.c_str(), path);
+            _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", m_BaseDir.c_str(), pFileName);
         }
-        
         DWORD attrs = GetFileAttributesA(fullPath);
         return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
     }
-    
-    virtual void* Open(const char* fileName, const char* options, const char* pathID = nullptr) {
-        if (!fileName) return nullptr;
-        
+    virtual bool IsDirectory(const char* pFileName) { return false; }
+
+    // opens a file
+    virtual FileHandle_t Open(const char* pFileName, const char* pOptions, const char* pathID = 0L) {
+        if (!pFileName) return (FileHandle_t)0;
         char fullPath[MAX_PATH];
         if (m_BaseDir.empty()) {
-            strcpy_s(fullPath, MAX_PATH, fileName);
+            strcpy_s(fullPath, MAX_PATH, pFileName);
         } else {
-            _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", m_BaseDir.c_str(), fileName);
+            _snprintf_s(fullPath, MAX_PATH, _TRUNCATE, "%s\\%s", m_BaseDir.c_str(), pFileName);
         }
-        
         FILE* f = nullptr;
-        if (fopen_s(&f, fullPath, options) != 0) {
-            return nullptr;
-        }
-        return (void*)f;
+        if (fopen_s(&f, fullPath, pOptions) != 0) return (FileHandle_t)0;
+        return (FileHandle_t)f;
     }
     
-    virtual int Read(void* pOutput, int size, void* handle) {
-        if (!pOutput || !handle) return 0;
-        return fread(pOutput, 1, size, (FILE*)handle);
+    virtual void Close(FileHandle_t file) { 
+        if (file) fclose((FILE*)file);
     }
     
-    virtual int Write(const void* pInput, int size, void* handle) {
-        if (!pInput || !handle) return 0;
-        return fwrite(pInput, 1, size, (FILE*)handle);
+    virtual void Seek(FileHandle_t file, int pos, FileSystemSeek_t seekType) { 
+        if (file) fseek((FILE*)file, pos, (seekType == FILESYSTEM_SEEK_HEAD) ? SEEK_SET : 
+            (seekType == FILESYSTEM_SEEK_CURRENT) ? SEEK_CUR : SEEK_END);
     }
-    
-    virtual void Close(void* handle) {
-        if (handle) fclose((FILE*)handle);
+    virtual unsigned int Tell(FileHandle_t file) { 
+        return file ? ftell((FILE*)file) : 0;
     }
+    virtual unsigned int Size(FileHandle_t file) { 
+        if (!file) return 0;
+        long pos = ftell((FILE*)file);
+        fseek((FILE*)file, 0, SEEK_END);
+        long size = ftell((FILE*)file);
+        fseek((FILE*)file, pos, SEEK_SET);
+        return (unsigned int)size;
+    }
+    virtual unsigned int Size(const char* pFileName) { return 0; }
     
-    virtual bool IsInitialized() const { return m_bInitialized; }
-    virtual const char* GetBaseDir() const { return m_BaseDir.c_str(); }
+    virtual long GetFileTime(const char* pFileName) { return 0; }
+    virtual void FileTimeToString(char* pStrip, int maxCharsIncludingTerminator, long fileTime) {}
+    virtual bool IsOk(FileHandle_t file) { return file != (FileHandle_t)0; }
+    virtual void Flush(FileHandle_t file) { if (file) fflush((FILE*)file); }
+    virtual bool EndOfFile(FileHandle_t file) { return file ? feof((FILE*)file) : true; }
+    
+    virtual int Read(void* pOutput, int size, FileHandle_t file) { 
+        return file ? fread(pOutput, 1, size, (FILE*)file) : 0;
+    }
+    virtual int Write(void const* pInput, int size, FileHandle_t file) { 
+        return file ? fwrite(pInput, 1, size, (FILE*)file) : 0;
+    }
+    virtual char* ReadLine(char* pOutput, int maxChars, FileHandle_t file) { 
+        return file ? fgets(pOutput, maxChars, (FILE*)file) : nullptr;
+    }
+    virtual int FPrintf(FileHandle_t file, char* pFormat, ...) { return 0; }
+
+    // FindFirst/FindNext - stubs
+    virtual const char* FindFirst(const char* pWildCard, FileFindHandle_t* pHandle, const char* pathID = 0L) { return nullptr; }
+    virtual const char* FindNext(FileFindHandle_t handle) { return nullptr; }
+    virtual bool FindIsDirectory(FileFindHandle_t handle) { return false; }
+    virtual void FindClose(FileFindHandle_t handle) {}
+    
+    // Stub implementations for remaining methods
+    virtual void GetLocalCopy(const char* pFileName) {}
+    virtual const char* GetLocalPath(const char* pFileName, char* pLocalPath, int localPathBufferSize) { return nullptr; }
+    virtual char* ParseFile(char* pFileBytes, char* pToken, bool* pWasQuoted) { return nullptr; }
+    virtual bool FullPathToRelativePath(const char* pFullpath, char* pRelative) { return false; }
+    virtual bool GetCurrentDirectory(char* pDirectory, int maxlen) { return false; }
+    virtual void PrintOpenedFiles(void) {}
+    virtual void SetWarningFunc(void (*pfnWarning)(const char* fmt, ...)) {}
+    virtual void SetWarningLevel(int level) {}
+    virtual void LogLevelLoadStarted(const char* name) {}
+    virtual void LogLevelLoadFinished(const char* name) {}
+    virtual int HintResourceNeed(const char* hintlist, int forgetEverything) { return 0; }
+    virtual int PauseResourcePreloading(void) { return 0; }
+    virtual int ResumeResourcePreloading(void) { return 0; }
+    virtual int SetVBuf(FileHandle_t stream, char* buffer, int mode, long size) { return 0; }
+    virtual void GetInterfaceVersion(char* p, int maxlen) {}
+    virtual bool IsFileImmediatelyAvailable(const char* pFileName) { return false; }
 };
 
-// Sys interface stub
-// Provides command line and system-level operations
-class CSysStub
+// Sys interface stub - command line handling
+class CSysStub : public IBaseInterface
 {
 private:
     std::vector<std::string> m_Argv;
@@ -112,6 +174,7 @@ private:
 public:
     CSysStub() {}
     
+    // Command line init
     virtual bool InitArgv(const char* cmdLine) {
         m_Argv.clear();
         std::string line = cmdLine ? cmdLine : "";
@@ -142,12 +205,11 @@ public:
 };
 
 // Tier0 memory interface stub
-class CTier0Stub
+class CTier0Stub : public IBaseInterface
 {
 public:
     CTier0Stub() {}
     
-    // Memory allocation stubs - map to standard heap
     virtual void* MemAlloc(size_t size) { return malloc(size); }
     virtual void* MemAlloc(size_t size, const char* pFileName, int nLine) { return malloc(size); }
     virtual void MemFree(void* pMem) { free(pMem); }
@@ -160,10 +222,9 @@ namespace SourceEngine {
     inline CFilesystemStub& GetFilesystemStub() { static CFilesystemStub stub; return stub; }
     inline CSysStub& GetSysStub() { static CSysStub stub; return stub; }
     inline CTier0Stub& GetTier0Stub() { static CTier0Stub stub; return stub; }
-    inline std::vector<ShutdownEntry>& GetShutdownHandlers() { static std::vector<ShutdownEntry> handlers; return handlers; }
 }
 
-// C linkage exports for SteamInternal_CreateInterface
+// C linkage exports for CreateInterface
 extern "C" {
 
 S_API void* S_CALLTYPE GetSourceFilesystemStub() {

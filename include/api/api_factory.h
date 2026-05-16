@@ -11,24 +11,31 @@ static void* TrySourceEngineInterface(const char* ver)
 	if (!ver) return nullptr;
 
 	// Filesystem interface - required for Half-Life save games and config
-	// Note: Half-Life uses FILESYSTEM_INTERFACE_VERSION, later Source uses VFileSystem009 etc
-	if (strcmp(ver, "FILESYSTEM_INTERFACE_VERSION") == 0 ||
-		strcmp(ver, "FILESYSTEM_INIT") == 0 ||
-		strcmp(ver, "FileSystem_Startup") == 0)
+	// GoldSrc uses "VFileSystem009" (from FILESYSTEM_INTERFACE_VERSION macro expansion)
+	if (strcmp(ver, "VFileSystem009") == 0 ||
+		strcmp(ver, "VFileSystem008") == 0 ||
+		strcmp(ver, "VFileSystem007") == 0 ||
+		strcmp(ver, "VFileSystem006") == 0 ||
+		strcmp(ver, "VFileSystem005") == 0 ||
+		strcmp(ver, "VFileSystem004") == 0 ||
+		strcmp(ver, "VFileSystem003") == 0 ||
+		strcmp(ver, "VFileSystem002") == 0 ||
+		strcmp(ver, "VFileSystem001") == 0)
 	{
 		UCOLOG("[UCOnline2] Intercepting FILESYSTEM interface -> %s", ver);
 		return GetSourceFilesystemStub();
 	}
 
 	// Sys interface - required for Half-Life command line handling
-	if (strcmp(ver, "SYS_INTERFACE_VERSION") == 0)
+	if (strcmp(ver, "VSys001") == 0 ||
+		strcmp(ver, "VSys002") == 0)
 	{
 		UCOLOG("[UCOnline2] Intercepting SYS interface -> %s", ver);
 		return GetSourceSysStub();
 	}
 
 	// Tier0 interface - memory allocation etc
-	if (strcmp(ver, "TIER0_INTERFACE_VERSION") == 0)
+	if (strcmp(ver, "VTier001") == 0)
 	{
 		UCOLOG("[UCOnline2] Intercepting TIER0 interface");
 		return GetSourceTier0Stub();
@@ -170,6 +177,7 @@ S_API void* S_CALLTYPE CreateInterface(const char* ver, int* pReturnCode)
 
 // interfaceFactory - alias for filesystem_stdio.dll compatibility (GoldSrc Source)
 // Half-Life calls: interfaceFactory( FILESYSTEM_INTERFACE_VERSION, NULL )
+// which expands to interfaceFactory( "VFileSystem009", NULL )
 S_API void* S_CALLTYPE interfaceFactory(const char* ver, void* pFactory)
 {
 	UCOLOG("[UCOnline2] interfaceFactory -> %s\r\n", ver ? ver : "(null)");
