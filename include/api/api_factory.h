@@ -69,6 +69,11 @@ S_API void* S_CALLTYPE SteamGameServerInternal_CreateInterface(const char* iface
 	{
 		UCOLOG("[UCOnline2] SteamGameServerInternal_CreateInterface -> %s\r\n", iface);
 
+		// Also check for Source engine interfaces (filesystem_stdio may use this path too)
+		void* srcIface = TrySourceEngineInterface(iface);
+		if (srcIface)
+			return srcIface;
+
 		if (g_ServerModule)
 		{
 			g_pfnCreateInterface = (Fn_CreateInterface)GetProcAddress(g_ServerModule, "CreateInterface");
@@ -78,6 +83,40 @@ S_API void* S_CALLTYPE SteamGameServerInternal_CreateInterface(const char* iface
 	}
 
 	UCOColor(FOREGROUND_RED | FOREGROUND_INTENSITY, "[UCOnline2] GameServerCreateInterface: returning null\r\n");
+	return nullptr;
+}
+
+// Direct CreateInterface export - called by filesystem_stdio.dll and other Source modules
+// This is the main entry point that filesystem_stdio.dll uses via GetProcAddress
+S_API void* S_CALLTYPE CreateInterface(const char* ver, int* pReturnCode)
+{
+	if (ver)
+	{
+		UCOLOG("[UCOnline2] CreateInterface -> %s\r\n", ver);
+
+		// First check if this is a Source engine platform interface
+		void* srcIface = TrySourceEngineInterface(ver);
+		if (srcIface)
+		{
+			if (pReturnCode)
+				*pReturnCode = 0; // S_OK
+			return srcIface;
+		}
+
+		HMODULE hMod = g_ClientModule;
+		if (g_ServerModule) hMod = g_ServerModule;
+
+		if (hMod)
+		{
+			g_pfnCreateInterface = (Fn_CreateInterface)GetProcAddress(hMod, "CreateInterface");
+			if (g_pfnCreateInterface)
+				return g_pfnCreateInterface(ver, pReturnCode);
+		}
+	}
+
+	UCOColor(FOREGROUND_RED | FOREGROUND_INTENSITY, "[UCOnline2] CreateInterface (direct): returning null\r\n");
+	if (pReturnCode)
+		*pReturnCode = 1; // E_FAIL
 	return nullptr;
 }
 
