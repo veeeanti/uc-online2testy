@@ -13,7 +13,7 @@ Source engine games (Half-Life, CS, etc.) request interfaces that are NOT part o
 - `SYS_INTERFACE_VERSION` - system/command line handling  
 - `TIER0_INTERFACE_VERSION` - memory allocation
 
-These interfaces were being passed through to the real `steamclient.dll`, which doesn't provide them.
+Half-Life's `filesystem_stdio.dll` calls `interfaceFactory()` directly via GetProcAddress, expecting these interfaces from `steamclient.dll`.
 
 ## Solution
 
@@ -47,20 +47,30 @@ class CTier0Stub {
 ```
 
 ### 2. `include/api/api_factory.h` (MODIFIED)
-Added `TrySourceEngineInterface()` to intercept Source engine interface requests BEFORE passing to real steamclient.dll:
+Added two exports for interface interception:
 
+**`interfaceFactory()`** - Called by Half-Life's `filesystem_stdio.dll`:
 ```cpp
-static void* TrySourceEngineInterface(const char* ver) {
-    if (strcmp(ver, "FILESYSTEM_INTERFACE_VERSION") == 0 || ...) {
-        return GetSourceFilesystemStub();
+S_API void* S_CALLTYPE interfaceFactory(const char* ver, void* pFactory)
+{
+    // First check if this is a Source engine platform interface
+    void* srcIface = TrySourceEngineInterface(ver);
+    if (srcIface)
+        return srcIface;
+    return CreateInterface(ver, nullptr);
+}
+```
+
+**`CreateInterface()`** - Direct export for Source engine modules:
+```cpp
+S_API void* S_CALLTYPE CreateInterface(const char* ver, int* pReturnCode)
+{
+    void* srcIface = TrySourceEngineInterface(ver);
+    if (srcIface) {
+        if (pReturnCode) *pReturnCode = 0; // S_OK
+        return srcIface;
     }
-    if (strcmp(ver, "SYS_INTERFACE_VERSION") == 0) {
-        return GetSourceSysStub();
-    }
-    if (strcmp(ver, "TIER0_INTERFACE_VERSION") == 0) {
-        return GetSourceTier0Stub();
-    }
-    return nullptr;
+    // Fall through to real steamclient...
 }
 ```
 
@@ -71,16 +81,19 @@ Added include for the new header:
 ```
 
 ## How to Test
-1. Build the project
-2. Copy `steam_api.dll`/`steam_api64.dll` to Half-Life directory
+1. Build the project (Visual Studio: `msbuild uc_online2.vcxproj /p:Configuration=Release /p:Platform=x64`)
+2. Copy `build\x64\steam_api64.dll` to Half-Life directory
 3. Run Half-Life - errors should be resolved
-4. Check `%TEMP%\uc_online2.log` for interface interception logs:
+
+## Expected Log Output
+Check `%TEMP%\uc_online2.log`:
 ```
+[UCOnline2] interfaceFactory -> FILESYSTEM_INTERFACE_VERSION
 [UCOnline2] Intercepting FILESYSTEM interface -> FILESYSTEM_INTERFACE_VERSION
 [UCOnline2] Intercepting SYS interface -> SYS_INTERFACE_VERSION
 ```
 
-## Notes
+## Known Limitations
 - These are minimal stubs - full implementation would require replicating Valve's filesystem layer
-- The stubs prevent crashes but game-specific features (save synchronization) may not work
-- Goldberg Emu has more complete implementations if you need full Source engine compatibility
+- Save synchronization features may not work
+- Goldberg Emu has more complete implementations for full Source engine compatibility
